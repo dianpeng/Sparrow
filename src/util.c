@@ -11,7 +11,8 @@ struct CStr CStrVPrintF( const char* format , va_list vl ) {
   return ret;
 }
 
-size_t StrBufVPrintF( struct StrBuf* sbuf , const char* fmt , va_list vl ) {
+size_t StrBufVPrintF( struct StrBuf* sbuf , const char* fmt ,
+    va_list vl ) {
   size_t bufsz = sbuf->cap - sbuf->size;
   size_t oldsz = sbuf->size;
   int ret;
