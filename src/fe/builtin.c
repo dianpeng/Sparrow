@@ -734,3 +734,55 @@ struct ObjUdata* GCreateMapUdata( struct Sparrow* sparrow ) {
 /* =============================
  * GC stuff
  * ===========================*/
+#if 0
+static int gc_Mset( struct Sparrow* sparrow , Value object , Value key ,
+    Value value ) {
+  struct Runtime* runtime = sparrow->runtime;
+  struct ObjUdata* udata = Vget_udata(&object);
+  struct ObjMap* amap = (struct ObjMap*)(udata->pri);
+  if(Vis_str(&key)) {
+    ObjMapPut(amap,Vget_str(&key),value);
+    return MOPS_OK;
+  } else {
+    RuntimeError(runtime,PERR_ATTRIBUTE_TYPE,ValueGetTypeName(&key));
+    return MOPS_FAIL;
+  }
+}
+
+static int gc_Mseti( struct Sparrow* sparrow , Value object , Value key ,
+    Value value ) {
+  UNUSE_ARG(sparrow);
+  UNUSE_ARG(object);
+  UNUSE_ARG(key);
+  UNUSE_ARG(value);
+  return MOPS_SKIP;
+}
+
+static int gc_Mget( struct Sparrow* sparrow , Value object , Value key ,
+    Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  struct ObjUdata* udata  = Vget_udata(&object);
+  struct ObjMap* amap = (struct ObjMap*)(udata->pri);
+  if(Vis_str(&key)) {
+    if(ObjMapFind(amap,Vget_str(&key),ret)) {
+      RuntimeError(sparrow,PERR_TYPE_NO_ATTRIBUTE,GC_UDATA_NAME,
+          Vget_str(&key)->str);
+      return MOPS_FAIL;
+    } else {
+      return MOPS_OK;
+    }
+  } else {
+    RuntimeError(runtime,PERR_ATTRIBUTE_TYPE,ValueGetTypeName(&key));
+    return MOPS_FAIL;
+  }
+}
+
+static int gc_Mgeti( struct Sparrow* sparrow , Value object , Value key ,
+    Value* ret ) {
+  UNUSE_ARG(sparrow);
+  UNUSE_ARG(object);
+  UNUSE_ARG(key);
+  UNUSE_ARG(ret);
+  return MOPS_SKIP;
+}
+#endif
