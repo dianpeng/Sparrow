@@ -26,6 +26,8 @@ ObjListPush( struct ObjList* list, Value val ) {
 
 void ObjListExtend( struct ObjList* , const struct ObjList* );
 void ObjListResize( struct ObjList* , size_t );
+struct ObjList* ObjListSlice( struct Sparrow* , struct ObjList* , size_t ,
+    size_t );
 
 static SPARROW_INLINE void
 ObjListPop ( struct ObjList* list ) {

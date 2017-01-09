@@ -249,14 +249,117 @@ void Builtin_Exist(struct Runtime* rt , Value* v , int* f ){
  * list udata
  * ==============================*/
 
-#define META_CHECK_ARGUMENT(...) \
+#define META_CHECK_ARGUMENT(RT,OBJNAME,MNAME,...) \
   do { \
-    if(RuntimeCheckArg(__VA_ARGS__)) \
+    char buf[246]; \
+    sprintf(buf,"%s.%s",(OBJNAME),#MNAME); \
+    if(RuntimeCheckArg(RT,buf,__VA_ARGS__)) \
       return MOPS_FAIL; \
   } while(0);
 
+/* This function pointer is used to create a value which is called during
+ * MetaCall callback function */
+typedef int (*MCallCallback)( struct Runtime* , Value* ret );
 
-#define MMETHODNAME(TYPE,NAME) TYPE #NAME
+/* private data for storing global objects' intrinsic
+ * attributes */
+struct gvar_pri {
+  Value method[ SIZE_OF_IATTR ];
+  MCallCallback mcall_cb;
+};
+
+static enum MetaStatus gvar_Mcall( struct Sparrow* sparrow , Value udata ,
+    Value* ret ) {
+  struct Runtime* rt = sparrow->runtime;
+  struct ObjUdata* ud = Vget_udata(&udata);
+  struct gvar_pri* pri= (struct gvar_pri*)(ud->udata);
+  assert(rt);
+  if(pri->mcall_cb) {
+    /* Meta callback function */
+    if(pri->mcall_cb(rt,ret)) {
+      return MOPS_FAIL;
+    } else {
+      return MOPS_OK;
+    }
+  }
+  RuntimeError(rt,PERR_METAOPS_ERROR,ud->name.str,METAOPS_NAME(call));
+  return MOPS_FAIL;
+}
+
+static enum MetaStatus gvar_Mget( struct Sparrow* sparrow , Value udata ,
+    Value key , Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  struct ObjUdata* u = Vget_udata(&udata);
+  struct gvar_pri* pri = (struct gvar_pri*)(u->udata);
+
+  if(Vis_str(&key)) {
+    struct ObjStr* k = Vget_str(&key);
+    enum IntrinsicAttribute iattr = IAttrGetIndex(k->str);
+    if(iattr == SIZE_OF_IATTR) {
+      RuntimeError(runtime,PERR_TYPE_NO_ATTRIBUTE,u->name.str,k->str);
+      return MOPS_FAIL;
+    }
+    *ret = pri->method[iattr];
+    return MOPS_OK;
+  } else {
+    RuntimeError(runtime,PERR_ATTRIBUTE_TYPE,u->name.str,
+        ValueGetTypeString(key));
+    return MOPS_FAIL;
+  }
+}
+
+static enum MetaStatus gvar_Mgeti( struct Sparrow* sparrow , Value udata ,
+    enum IntrinsicAttribute iattr , Value* ret ) {
+  struct ObjUdata* u = Vget_udata(&udata);
+  struct gvar_pri* pri = (struct gvar_pri*)(u->udata);
+  UNUSE_ARG(sparrow);
+  *ret = pri->method[iattr];
+  return MOPS_OK;
+}
+
+static void gvar_Mmark( struct ObjUdata* udata ) {
+  struct gvar_pri* pri = (struct gvar_pri*)(udata->udata);
+  size_t i;
+  for( i = 0 ; i < SIZE_OF_IATTR; ++i ) {
+    GCMark(pri->method[i]);
+  }
+}
+
+static void gvar_Mdestroy( void* udata ) {
+  free(udata);
+}
+
+struct cmethod_ptr {
+  CMethod ptr;
+  struct ObjStr* name;
+};
+
+static struct ObjUdata* gvar_uobj_create( struct Sparrow* sparrow ,
+    const char* objname, MCallCallback mcall_cb,
+    struct cmethod_ptr* methods ) {
+  struct gvar_pri* pri = malloc(sizeof(*pri));
+  struct ObjUdata* u = ObjNewUdataNoGC(sparrow,objname,pri,
+      gvar_Mmark,gvar_Mdestroy);
+  size_t i;
+  Value self;
+
+  Vset_udata(&self,u);
+  for( i = 0; i < SIZE_OF_IATTR ; ++i ) {
+    if(methods[i].ptr) {
+      struct ObjMethod* m = ObjNewMethodNoGC(sparrow,methods[i].ptr,
+          self,methods[i].name);
+      Vset_method(pri->method+i,m);
+    } else {
+      Vset_null(pri->method+i);
+    }
+  }
+  pri->mcall_cb = NULL;
+
+  u->mops.get = gvar_Mget;
+  u->mops.geti = gvar_Mgeti;
+  u->mops.call = gvar_Mcall;
+  return u;
+}
 
 /* list attributes */
 static int list_push( struct Sparrow* sth ,
@@ -366,34 +469,7 @@ static int list_empty( struct Sparrow* sth,
   return 0;
 }
 
-static int list_index( struct Sparrow* sth,
-    Value obj,
-    Value* ret ) {
-  struct Runtime* runtime = sth->runtime;
-  Value a1,a2;
-  size_t idx;
-
-  assert(Vis_udata(&obj));
-
-  if(RuntimeCheckArg(runtime,"list.index",2,ARG_LIST,
-                                            ARG_CONV_NUMBER))
-    return -1;
-
-  a1 = RuntimeGetArg(runtime,0);
-  a2 = RuntimeGetArg(runtime,1);
-
-  if(ToSize(Vget_number(&a2),&idx) ||
-    (idx >= ObjListSize(Vget_list(&a1)))) {
-    RuntimeError(runtime,"list.index " PERR_INDEX_OUT_OF_RANGE);
-    return -1;
-  }
-  *ret = ObjListIndex(Vget_list(&a1),idx);
-  return 0;
-}
-
-static int list_clear( struct Sparrow* sth ,
-    Value obj,
-    Value* ret ) {
+static int list_clear( struct Sparrow* sth , Value obj, Value* ret ) {
   struct Runtime* runtime = sth->runtime;
   Value arg;
   assert(Vis_udata(&obj));
@@ -404,115 +480,257 @@ static int list_clear( struct Sparrow* sth ,
   return 0;
 }
 
-/* opaque pointer for global list object */
-struct listobj_pri {
-  /* Cached method for intrinsic attributes */
-  Value method[ SIZE_OF_IATTR ];
-};
+static int list_slice( struct Sparrow* sparrow , Value obj , Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  struct ObjList* new_list;
+  struct ObjList* old_list;
+  Value a1, a2, a3;
+  size_t start,end;
+
+  assert(Vis_udata(&obj));
+  if(RuntimeCheckArg(runtime,"list.slice",3,ARG_LIST,
+                                            ARG_CONV_NUMBER,
+                                            ARG_CONV_NUMBER))
+    return -1;
+
+  a1 = RuntimeGetArg(runtime,0);
+  a2 = RuntimeGetArg(runtime,1);
+  a3 = RuntimeGetArg(runtime,2);
+
+  if(ToSize(Vget_number(&a2),&start)) {
+    RuntimeError(runtime,PERR_SIZE_OVERFLOW,Vget_number(&a2));
+    return -1;
+  }
+  if(ToSize(Vget_number(&a3),&end)) {
+    RuntimeError(runtime,PERR_SIZE_OVERFLOW,Vget_number(&a3));
+    return -1;
+  }
+  old_list = Vget_list(&a1);
+  if(start > old_list->size) start = old_list->size;
+  if(end < start) end = start;
+  new_list = ObjListSlice(sparrow,old_list,start,end);
+  Vset_list(ret,new_list);
+  return 0;
+}
 
 #define LIST_UDATA_NAME "__list__"
 
-static enum MetaStatus list_Mcall( struct Sparrow* sparrow , Value udata ,
-    Value* ret ) {
-  struct Runtime* rt = sparrow->runtime;
-  assert(Vis_udata(&udata));
-  assert(rt);
-  META_CHECK_ARGUMENT(rt,MMETHODNAME(LIST_UDATA_NAME,__call),
-      1,ARG_CONV_NUMBER) {
-    Value arg = RuntimeGetArg( rt , 0 );
-    size_t sz;
-    if(ToSize( Vget_number(&arg) , &sz)) {
-      RuntimeError(rt,PERR_SIZE_OVERFLOW,Vget_number(&arg));
-      return MOPS_FAIL;
-    }
-    Vset_list(ret,ObjNewList(sparrow,sz));
-    return MOPS_OK;
-  }
-}
-
-static enum MetaStatus list_Mget( struct Sparrow* sparrow , Value udata ,
-    Value key , Value* ret ) {
-  struct Runtime* runtime = sparrow->runtime;
-  struct ObjUdata* u = Vget_udata(&udata);
-  if(Vis_str(&key)) {
-    struct ObjStr* k = Vget_str(&key);
-    struct listobj_pri* pri = (struct listobj_pri*)(u->udata);
-    enum IntrinsicAttribute iattr = IAttrGetIndex(k->str);
-    if(iattr == SIZE_OF_IATTR) {
-      RuntimeError(runtime,PERR_TYPE_NO_ATTRIBUTE,LIST_UDATA_NAME,k->str);
-      return MOPS_FAIL;
-    }
-    *ret = pri->method[iattr];
-    return MOPS_OK;
-  } else {
-    RuntimeError(runtime,PERR_ATTRIBUTE_TYPE,LIST_UDATA_NAME,
-        ValueGetTypeString(key));
-    return MOPS_FAIL;
-  }
-}
-
-static enum MetaStatus list_Mgeti( struct Sparrow* sparrow , Value udata ,
-    enum IntrinsicAttribute iattr , Value* ret ) {
-  struct ObjUdata* u = Vget_udata(&udata);
-  struct listobj_pri* pri = (struct listobj_pri*)(u->udata);
-  UNUSE_ARG(sparrow);
-  *ret = pri->method[iattr];
-  return MOPS_OK;
-}
-
-static void list_Mmark( struct ObjUdata* udata ) {
-  struct listobj_pri* pri = (struct listobj_pri*)(udata->udata);
-  GCMarkMethod(Vget_method(pri->method+IATTR_PUSH));
-  GCMarkMethod(Vget_method(pri->method+IATTR_POP));
-  GCMarkMethod(Vget_method(pri->method+IATTR_EXTEND));
-  GCMarkMethod(Vget_method(pri->method+IATTR_SIZE));
-  GCMarkMethod(Vget_method(pri->method+IATTR_RESIZE));
-  GCMarkMethod(Vget_method(pri->method+IATTR_INDEX));
-  GCMarkMethod(Vget_method(pri->method+IATTR_EMPTY));
-  GCMarkMethod(Vget_method(pri->method+IATTR_CLEAR));
-}
-
-static void list_Mdestroy( void* udata ) {
-  free(udata);
-}
-
 struct ObjUdata* GCreateListUdata( struct Sparrow* sparrow ) {
-  size_t i;
-  struct listobj_pri* pri = malloc(sizeof(*pri));
-  struct ObjUdata* udata = ObjNewUdataNoGC(sparrow,
-      LIST_UDATA_NAME,
-      pri,
-      list_Mmark,
-      list_Mdestroy);
-  Value self;
-  Vset_udata(&self,udata);
-
-  /* clear the method table */
-  for( i = 0 ;i < SIZE_OF_IATTR ; ++i )
-    Vset_null(pri->method+i);
-
-#define ADD(TYPE,FUNC) \
-  do { \
-    struct ObjMethod* method = ObjNewMethod(sparrow,FUNC,self,\
-        &(sparrow->IAttrName_##TYPE)); \
-    Vset_method(pri->method+IATTR_##TYPE,method); \
-  } while(0)
-
-  ADD(PUSH,list_push);
-  ADD(POP,list_pop);
-  ADD(EXTEND,list_extend);
-  ADD(SIZE,list_size);
-  ADD(RESIZE,list_resize);
-  ADD(INDEX,list_index);
-  ADD(EMPTY,list_empty);
-  ADD(CLEAR,list_clear);
-
-#undef ADD /* ADD */
-
-  /* Initialize Metaops table */
-  udata->mops.get = list_Mget;
-  udata->mops.geti= list_Mgeti;
-  udata->mops.call= list_Mcall;
-
-  return udata;
+  struct cmethod_ptr method_ptr[ SIZE_OF_IATTR ] = {
+    { list_extend , IATTR_NAME(sparrow,EXTEND) },
+    { list_push   , IATTR_NAME(sparrow,PUSH)   },
+    { list_pop    , IATTR_NAME(sparrow,POP)    },
+    { list_size   , IATTR_NAME(sparrow,SIZE)   },
+    { list_resize , IATTR_NAME(sparrow,RESIZE) },
+    { list_empty  , IATTR_NAME(sparrow,EMPTY)  },
+    { list_clear  , IATTR_NAME(sparrow,CLEAR)  },
+    { list_slice  , IATTR_NAME(sparrow,SLICE)  },
+    { NULL        , IATTR_NAME(sparrow,EXIST)  }
+  };
+  return gvar_uobj_create(sparrow,LIST_UDATA_NAME,NULL,method_ptr);
 }
+
+/* ===========================
+ * String global variable
+ * =========================*/
+static int string_size( struct Sparrow* sth , Value obj, Value* ret ) {
+  struct Runtime* runtime = sth->runtime;
+  Value arg;
+  assert( Vis_udata(&obj) );
+  if(RuntimeCheckArg(runtime,"string.size",1,ARG_STRING)) return -1;
+  arg = RuntimeGetArg(runtime,0);
+  Vset_number(ret,Vget_str(&arg)->len);
+  return 0;
+}
+
+static int string_empty( struct Sparrow* sth , Value obj, Value* ret ) {
+  struct Runtime* runtime = sth->runtime;
+  Value arg;
+  assert( Vis_udata(&obj) );
+  if(RuntimeCheckArg(runtime,"string.empty",1,ARG_STRING)) return -1;
+  arg = RuntimeGetArg(runtime,0);
+  Vset_boolean(ret,Vget_str(&arg)->len == 0);
+  return 0;
+}
+
+static int string_slice( struct Sparrow* sth , Value obj , Value* ret ) {
+  struct Runtime* runtime = sth->runtime;
+  Value a1,a2,a3;
+  size_t start,end;
+  struct ObjStr* str;
+  struct ObjStr* rstr;
+  char sbuf[ LARGE_STRING_SIZE ];
+  char* buf = sbuf;
+
+  assert( Vis_udata(&obj) );
+  if(RuntimeCheckArg(runtime,"string.slice",3,ARG_STRING,
+                                              ARG_CONV_NUMBER,
+                                              ARG_CONV_NUMBER))
+    return -1;
+  a1 = RuntimeGetArg(runtime,0);
+  a2 = RuntimeGetArg(runtime,1);
+  a3 = RuntimeGetArg(runtime,2);
+  if( ToSize(Vget_number(&a2),&start) ) {
+    RuntimeError(runtime,PERR_SIZE_OVERFLOW,Vget_number(&a2));
+    return -1;
+  }
+  if( ToSize(Vget_number(&a3),&end) ) {
+    RuntimeError(runtime,PERR_SIZE_OVERFLOW,Vget_number(&a3));
+    return -1;
+  }
+  str = Vget_str(&a1);
+
+  if(start >= str->len) start = str->len;
+  if(end < start) end = start;
+
+  if(end-start > LARGE_STRING_SIZE) {
+    buf = malloc(end-start);
+  }
+  memcpy(buf,str->str+start,(end-start));
+
+  /* Create a managed string , here we have no way to avoid
+   * a duplicate memory allocation */
+  rstr = ObjNewStr(sth,buf,(end-start));
+
+  /* Free the memory if we need to since it is on the heap */
+  if(buf != sbuf) free(buf);
+
+  Vset_str(ret,rstr);
+  return 0;
+}
+
+#define STRING_UDATA_NAME "__string__"
+
+struct ObjUdata* GCreateStringUdata( struct Sparrow* sparrow ) {
+  struct cmethod_ptr method_ptr[ SIZE_OF_IATTR ] = {
+    { NULL , IATTR_NAME(sparrow,EXTEND) },
+    { NULL , IATTR_NAME(sparrow,PUSH)   },
+    { NULL , IATTR_NAME(sparrow,POP)    },
+    { string_size , IATTR_NAME(sparrow,SIZE)   },
+    { NULL , IATTR_NAME(sparrow,RESIZE) },
+    { string_empty , IATTR_NAME(sparrow,EMPTY)  },
+    { NULL , IATTR_NAME(sparrow,CLEAR)  },
+    { string_slice , IATTR_NAME(sparrow,SLICE)  },
+    { NULL , IATTR_NAME(sparrow,EXIST) }
+  };
+  return gvar_uobj_create(sparrow,STRING_UDATA_NAME,NULL,method_ptr);
+}
+
+/* ======================
+ * Map global variable
+ * ====================*/
+
+static int map_pop( struct Sparrow* sparrow , Value obj , Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  Value a1,a2;
+  struct ObjMap* m;
+  struct ObjStr* key;
+  assert(Vis_udata(&obj));
+  if(RuntimeCheckArg(runtime,"map.pop",2,ARG_MAP,ARG_STRING))
+    return -1;
+  a1 = RuntimeGetArg(runtime,0);
+  a2 = RuntimeGetArg(runtime,1);
+  m = Vget_map(&a1);
+  key=Vget_str(&a2);
+  Vset_boolean(ret,ObjMapRemove(m,Vget_str(&a2),NULL)==0);
+  return 0;
+}
+
+static int map_extend( struct Sparrow* sparrow , Value obj , Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  Value a1,a2;
+  struct ObjMap* src;
+  struct ObjMap* dest;
+  struct ObjIterator oitr;
+  assert(Vis_udata(&obj));
+  if(RuntimeCheckArg(runtime,"map.extend",2,ARG_MAP,ARG_MAP))
+    return -1;
+  a1 = RuntimeGetArg(runtime,0);
+  a2 = RuntimeGetArg(runtime,1);
+  src = Vget_map(&a2); dest = Vget_map(&a1);
+
+  ObjMapIterInit(dest,&oitr);
+  while(oitr.has_next(sparrow,&oitr) == 0) {
+    Value key;
+    Value val;
+    oitr.deref(sparrow,&oitr,&key,&val);
+    ObjMapPut(src,Vget_str(&key),val);
+    oitr.move(sparrow,&oitr);
+  }
+  Vset_map(ret,src);
+  return 0;
+}
+
+static int map_size( struct Sparrow* sparrow , Value obj , Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  Value a1;
+  assert(Vis_udata(&obj));
+  if(RuntimeCheckArg(runtime,"map.size",1,ARG_MAP))
+    return -1;
+  a1 = RuntimeGetArg(runtime,0);
+  Vset_number(ret,Vget_map(&a1)->size);
+  return 0;
+}
+
+static int map_empty( struct Sparrow* sparrow , Value obj , Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  Value a1;
+  assert(Vis_udata(&obj));
+  if(RuntimeCheckArg(runtime,"map.empty",1,ARG_MAP))
+    return -1;
+  a1 = RuntimeGetArg(runtime,0);
+  Vset_boolean(ret,Vget_map(&a1)->size == 0);
+  return 0;
+}
+
+static int map_exist( struct Sparrow* sparrow , Value obj , Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  Value a1,a2;
+  struct ObjMap* map;
+  struct ObjStr* key;
+  assert(Vis_udata(&obj));
+
+  if(RuntimeCheckArg(runtime,"map.exist",2,ARG_MAP,
+                                           ARG_STRING))
+    return -1;
+  a1 = RuntimeGetArg(runtime,0);
+  a2 = RuntimeGetArg(runtime,1);
+
+  map = Vget_map(&a1);
+  key = Vget_str(&a2);
+
+  Vset_boolean(ret,ObjMapFind(map,key,NULL) ==0);
+  return 0;
+}
+
+static int map_clear( struct Sparrow* sparrow , Value obj , Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  Value a1;
+  assert(Vis_udata(&obj));
+  if(RuntimeCheckArg(runtime,"map.clear",1,ARG_MAP)) return -1;
+  a1 = RuntimeGetArg(runtime,0);
+  ObjMapClear(Vget_map(&a1));
+  Vset_null(ret);
+  return 0;
+}
+
+#define MAP_UDATA_NAME "__map__"
+
+struct ObjUdata* GCreateMapUdata( struct Sparrow* sparrow ) {
+  struct cmethod_ptr method_ptr[ SIZE_OF_IATTR ] = {
+    { NULL , IATTR_NAME(sparrow,EXTEND) },
+    { NULL , IATTR_NAME(sparrow,PUSH)   },
+    { map_pop , IATTR_NAME(sparrow,POP)    },
+    { map_size , IATTR_NAME(sparrow,SIZE)   },
+    { NULL , IATTR_NAME(sparrow,RESIZE) },
+    { map_empty , IATTR_NAME(sparrow,EMPTY)  },
+    { map_clear , IATTR_NAME(sparrow,CLEAR)  },
+    { NULL , IATTR_NAME(sparrow,SLICE)  },
+    { map_exist , IATTR_NAME(sparrow,EXIST) }
+  };
+  return gvar_uobj_create(sparrow,MAP_UDATA_NAME,NULL,method_ptr);
+}
+
+/* =============================
+ * GC stuff
+ * ===========================*/

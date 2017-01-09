@@ -209,10 +209,10 @@ void Builtin_MSec( struct Runtime* rt , Value* ret , int* fail );
 
 /* Builtin global objects creation routine */
 struct ObjUdata* GCreateListUdata( struct Sparrow* );
+struct ObjUdata* GCreateStringUdata( struct Sparrow* );
+struct ObjUdata* GCreateMapUdata( struct Sparrow* );
 
 /*
-struct ObjUdata* GCreateMapUdata( struct Sparrow* );
-struct ObjUdata* GCreateStringUdata( struct Sparrow* );
 struct ObjUdata* GCreateGCUdata( struct Sparrow* );
 struct ObjUdata* GCreateMetaUdata( struct Sparrow* );
 */

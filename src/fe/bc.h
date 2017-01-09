@@ -284,8 +284,9 @@ extern struct CStr VARG;
   __(SIZE,"size") \
   __(RESIZE,"resize") \
   __(EMPTY,"empty") \
-  __(INDEX,"index") \
-  __(CLEAR,"clear")
+  __(CLEAR,"clear") \
+  __(SLICE,"slice") \
+  __(EXIST,"exist")
 
 enum IntrinsicFunction {
 #define __(A,B,C) IFUNC_##A,

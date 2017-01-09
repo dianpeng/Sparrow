@@ -530,6 +530,9 @@ static void global_env_init( struct Sparrow* sparrow ,
   } while(0)
 
   ADD(list,GCreateListUdata);
+  ADD(map ,GCreateMapUdata);
+  ADD(string,GCreateStringUdata);
+
   /* TODO :: Add other cached object here */
 
 #undef ADD /* ADD */

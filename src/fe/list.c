@@ -1,6 +1,7 @@
 #include "list.h"
 #include "vm.h"
 #include "error.h"
+#include "object.h"
 
 void ObjListInit( struct Sparrow* sparrow , struct ObjList* list ,
     size_t cap ) {
@@ -45,6 +46,17 @@ void ObjListResize( struct ObjList* self, size_t size ) {
     self->size = size;
     self->cap = ncap;
   }
+}
+
+struct ObjList* ObjListSlice( struct Sparrow* sparrow , struct ObjList* list ,
+    size_t start , size_t end ) {
+  struct ObjList* new_list;
+  assert(start <= end);
+  new_list = ObjNewList(sparrow,(end-start));
+  assert( new_list->cap >= (end-start) );
+  memcpy(new_list->arr,list->arr+start,(end-start)*sizeof(Value));
+  new_list->size = (end-start);
+  return new_list;
 }
 
 static int list_iter_has_next( struct Sparrow* sth ,

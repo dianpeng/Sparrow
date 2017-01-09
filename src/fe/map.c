@@ -143,7 +143,7 @@ int ObjMapFind( struct ObjMap* map , const struct ObjStr* key ,
       key->hash,
       DO_FIND);
   if(entry) {
-    *val = entry->value;
+    if(val) *val = entry->value;
     return 0;
   } else {
     return -1;
@@ -158,7 +158,7 @@ int ObjMapFindStr( struct ObjMap* map , const char* key ,
       key_hash(key,strlen(key)),
       DO_FIND);
   if(entry) {
-    *val = entry->value;
+    if(val) *val = entry->value;
     return 0;
   } else {
     return -1;

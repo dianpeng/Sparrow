@@ -1387,7 +1387,12 @@ static void test_gvar() {
         list.clear(f);
         assert(list.empty(f),"list.empty");
         list.push(f,1); list.push(f,2);
-        assert(list.index(f,1) == 2,"list.index");
+
+        f = [1,2,3,4,5];
+        var new_list = list.slice(f,1,4); // [2,3,4]
+        assert(new_list[0] == 2 &&
+               new_list[1] == 3 &&
+               new_list[2] == 4 , "list.slice");
         return true;
         ),"true");
   expect(STRINGIFY(
@@ -1410,6 +1415,33 @@ static void test_gvar() {
         f = list.clear;
         f(l);
         assert(list.size(l) == 0,"list.size");
+        return true;
+        ),"true");
+  expect(STRINGIFY(
+        var m = {};
+        assert(map.size(m) == 0,"map.size");
+        assert(map.empty(m),"map.emty");
+        m["UU"] = "VV";
+        assert(map.exist(m,"UU"),"map.exist");
+        assert(map.exist(m,"VV")==false,"map.exist");
+        assert(map.pop(m,"UU"),"map.pop");
+        assert(map.size(m) == 0,"map.size");
+        assert(map.empty(m),"map.empty");
+        assert(map.exist(m,"UU")==false,"map.exist");
+        m["XX"] = 1;
+        m["UU"] = 2;
+        assert(!map.empty(m),"map.empty");
+        map.clear(m);
+        assert(map.empty(m),"map.empty");
+        return true;
+        ),"true");
+  expect(STRINGIFY(
+        var s = "Hello";
+        assert(string.size(s) == size(s),"string.size");
+        assert(string.empty(s) == false,"string.empty");
+        assert(string.slice(s,1,3) == "el","string.slice");
+        assert(string.size("") == 0,"string.size");
+        assert(string.empty(""),"string.empty");
         return true;
         ),"true");
 }
