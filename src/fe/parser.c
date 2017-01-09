@@ -1507,15 +1507,14 @@ static int parse_for( struct Parser* p ) {
     CONSUME(TK_IN); /* Skip in */
     if(pexpr(p,&cond)) return -1; /* evaluate the target */
     if(tryemit_expr(p,&cond)) return -1;
-    cbOP(BC_INEW); /* New an iterator */
     if(def_rndvar(p,"itr") != LOCVAR_NEW) { /* pin iterator to an internal variable */
       perr(PERR_TOO_MANY_LOCAL_VARIABLES);
       return -1;
     }
     CONSUME(TK_RPAR);
     /* loop prolog */
+    skip_body = cbputA(); /* forprep , loop header instruction */
     loop_hdr = CodeBufferPos(codebuf(p)); /* store the loop header */
-    cbOP(BC_ITEST); skip_body = cbputA(); /* test iterator , otherwise jump */
     {
       struct LexScope inner_scp; /* Loop body scope */
       enter_lexscope(p,&inner_scp,0);
@@ -1537,13 +1536,12 @@ static int parse_for( struct Parser* p ) {
       if(parse_stmtorchunk(p,0)) return -1; /* goto inner body */
       cont_jmp = CodeBufferPos(codebuf(p)); /* Continue statment jump position */
       leave_lexscope(p); /* leave the inner loop body */
-      cbOP(BC_INEXT); /* Move the iterator to next */
-      cbA(BC_JMP,loop_hdr); /* Jump back to loop header */
+      cbA(BC_FORLOOP,loop_hdr);
     }
     /* fix all break/continue statment jump table */
     _close_forjump(p,cont_jmp);
     /* fix skip_body jump */
-    cbpatchA(skip_body,BC_JF,CodeBufferPos(codebuf(p)));
+    cbpatchA(skip_body,BC_FORPREP,CodeBufferPos(codebuf(p)));
     leave_lexscope(p);
     return 0;
   } else {

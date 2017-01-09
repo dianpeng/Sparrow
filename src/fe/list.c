@@ -3,16 +3,18 @@
 #include "error.h"
 #include "object.h"
 
-void ObjListInit( struct Sparrow* sparrow , struct ObjList* list ,
-    size_t cap ) {
-  if(cap == 0) {
-    list->arr = NULL;
-    list->size = list->cap = 0;
-  } else {
-    list->arr = malloc(cap*sizeof(Value));
-    list->size = 0;
-    list->cap = cap;
+void ObjListAssign( struct ObjList* self , size_t index , Value value ) {
+  size_t i;
+  if(index >= self->cap) {
+    size_t ncap = index + 1 + ( self->cap - self->size );
+    self->arr = realloc(self->arr,ncap*sizeof(Value));
+    self->cap = ncap;
   }
+  for( i = self->size ; i < index ; ++i ) {
+    Vset_null(self->arr+i);
+  }
+  self->arr[index] = value;
+  if(index >= self->size) self->size = index + 1;
 }
 
 void ObjListExtend( struct ObjList* self , const struct ObjList* that ) {

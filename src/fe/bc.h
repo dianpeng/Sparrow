@@ -60,10 +60,6 @@ extern struct CStr VARG;
   __(BC_ICALL_RANGE,"c_range",1) \
   __(BC_ICALL_LOOP,"c_loop",1) \
   __(BC_ICALL_RUNSTRING,"c_run_string",1) \
-  __(BC_ICALL_GCFORCE,"c_gc_force",1) \
-  __(BC_ICALL_GCTRY,"c_gc_try",1) \
-  __(BC_ICALL_GCSTAT,"c_gc_stat",1) \
-  __(BC_ICALL_GCCONFIG,"c_gc_config",1) \
   __(BC_ICALL_MIN,"c_min",1) \
   __(BC_ICALL_MAX,"c_max",1) \
   __(BC_ICALL_SORT,"c_sort",1) \
@@ -199,11 +195,10 @@ extern struct CStr VARG;
   __(BC_GSETFALSE,"gsetfalse",1) \
   __(BC_GSETNULL,"gsetnull",1) \
   /* Iterator */ \
-  __(BC_INEW,"inew",0) \
-  __(BC_INEXT,"inext",0) \
-  __(BC_ITEST,"itest",0) \
   __(BC_IDREFK,"idrefk",0) \
   __(BC_IDREFKV,"idrefkv",0) \
+  __(BC_FORPREP,"forprep",1) \
+  __(BC_FORLOOP,"forloop",1) \
   /* Stack pop */ \
   __(BC_POP,"pop",1) \
   /* Return */ \
@@ -264,10 +259,6 @@ extern struct CStr VARG;
   __(RANGE,Range,"range") \
   __(LOOP,Loop,"loop") \
   __(RUNSTRING,RunString,"run_string") \
-  __(GCFORCE,GCForce,"gc_force") \
-  __(GCTRY,GCTry,"gc_try") \
-  __(GCSTAT,GCStat,"gc_stat") \
-  __(GCCONFIG,GCConfig,"gc_config") \
   __(MIN,Min,"min") \
   __(MAX,Max,"max") \
   __(SORT,Sort,"sort") \

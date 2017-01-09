@@ -1,8 +1,21 @@
 #ifndef MAP_H_
 #define MAP_H_
+#include "../conf.h"
 #include "object.h"
 
-void ObjMapInit( struct ObjMap* map , size_t capacity );
+static SPARROW_INLINE
+void ObjMapInit( struct ObjMap* map , size_t capacity ) {
+  if(capacity == 0) {
+    map->entry = NULL;
+  } else {
+    assert(!(capacity & (capacity-1)));
+    map->entry = calloc(capacity , sizeof(struct ObjMapEntry) );
+  }
+  map->cap = capacity;
+  map->size= 0;
+  map->scnt = 0;
+}
+
 void ObjMapPut( struct ObjMap* , struct ObjStr* key , Value val );
 int ObjMapFind( struct ObjMap* , const struct ObjStr*,Value* );
 int ObjMapFindStr( struct ObjMap* , const char* , Value* );

@@ -36,27 +36,41 @@ static int run_code( struct Sparrow* sparrow , const char* path ) {
   }
 }
 
-int main() {
-  DIR* d;
-  struct dirent* dir;
-  struct Sparrow sparrow;
-  int cnt = 0;
-  SparrowInit(&sparrow);
-  d = opendir("sparrow-test/");
-  if(d) {
-    while((dir = readdir(d)) != NULL) {
-      char fn[1024];
-      if(dir->d_type == DT_REG && dir->d_name[0] != '.') {
-        sprintf(fn,"sparrow-test/%s",dir->d_name);
-        if(run_code(&sparrow,fn)) abort();
-        ++cnt;
+int main( int argc , char* argv[] ) {
+  if( argc == 1 ) {
+    DIR* d;
+    struct dirent* dir;
+    struct Sparrow sparrow;
+    int cnt = 0;
+    SparrowInit(&sparrow);
+    d = opendir("sparrow-test/");
+    if(d) {
+      while((dir = readdir(d)) != NULL) {
+        char fn[1024];
+        if(dir->d_type == DT_REG && dir->d_name[0] != '.') {
+          sprintf(fn,"sparrow-test/%s",dir->d_name);
+          if(run_code(&sparrow,fn)) abort();
+          ++cnt;
+        }
       }
+    } else {
+      fprintf(stderr,"Cannot open folder sparrow-test/!\n");
     }
+    closedir(d);
+    SparrowDestroy(&sparrow);
+    printf("%d tests performed!\n",cnt);
+    return 0;
   } else {
-    fprintf(stderr,"Cannot open folder sparrow-test/!\n");
+    if(argc != 2) {
+      fprintf(stderr,"specify file path to run, one argument required!\n");
+      return -1;
+    } else {
+      struct Sparrow sparrow;
+      SparrowInit(&sparrow);
+      if(run_code(&sparrow,argv[1])) abort();
+      SparrowInit(&sparrow);
+      printf("finish running %s!\n",argv[1]);
+      return 0;
+    }
   }
-  closedir(d);
-  SparrowDestroy(&sparrow);
-  printf("%d tests performed!\n",cnt);
-  return 0;
 }

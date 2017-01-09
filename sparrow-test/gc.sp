@@ -25,7 +25,7 @@ var end = msec();
 print("Time:",end-start,"usec\n");
 
 // Force a gc operation to make rest of our code faster
-gc_force();
+gc.force();
 
 // 2. This is a pattern that currently we sucks at , of course we will fix it.
 // This pattern is that it aggressively accumulates a lot of memory in to a
@@ -37,13 +37,28 @@ gc_force();
 
 start = msec();
 var l = [];
+var len = 1000;
 // We cannot use large loop times since it will make our code impossible to
 // finish in current rookie GC strategy :)
-for( i in loop(1,2000,1) ) {
+for( i in loop(1,len,1) ) {
   list.push(l,{});
 }
 end = msec();
 print("Time:",end-start,"usec\n");
 
-stat = gc_stat();
+print(size(l),"\n");
+
+start = msec();
+var target = "map";
+for( i in loop(1,len,1) ) {
+  assert(typeof(l[i-1]) == target,"typeof");
+}
+end = msec();
+print("Time:",end-start,"usec\n");
+
+stat = gc.stat();
+
 print("GC:\n",stat,"\n");
+print("sz:" , gc.sz , "\n");
+print("threshold:",gc.threshold,"\n");
+print("adjust_threshold:",gc.adjust_threshold,"\n");

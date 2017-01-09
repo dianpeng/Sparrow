@@ -327,7 +327,7 @@ void StrBufAppendNumString( struct StrBuf* sbuf , double num ) {
   if( ret == 0.0 ) {
     StrBufAppendF(sbuf,"%.0f",ipart);
   } else {
-    StrBufAppendF(sbuf,"%.8f",num);
+    StrBufAppendF(sbuf,"%." SPARROW_REAL_FORMAT_PRECISION "f",num);
   }
 }
 

@@ -532,6 +532,7 @@ static void global_env_init( struct Sparrow* sparrow ,
   ADD(list,GCreateListUdata);
   ADD(map ,GCreateMapUdata);
   ADD(string,GCreateStringUdata);
+  ADD(gc,GCreateGCUdata);
 
   /* TODO :: Add other cached object here */
 
@@ -592,6 +593,7 @@ void SparrowInit( struct Sparrow* sth ) {
   sth->gc_ps_threshold = 0;
   sth->gc_penalty_ratio = SPARROW_DEFAULT_GC_PENALTY_RATIO;
   sth->gc_adjust_threshold = sth->gc_threshold;
+  sth->gc_penalty_times = 0;
   sth->str_arr = calloc(sizeof(struct ObjStr*),STRING_POOL_SIZE);
   sth->str_cap = STRING_POOL_SIZE;
   sth->str_size = 0;

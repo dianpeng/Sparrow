@@ -711,12 +711,7 @@ void vm_asetn( struct Runtime* rt,
     int* fail ) {
   if(Vis_list(&object)) {
     struct ObjList* l = Vget_list(&object);
-    if(index >= l->size) {
-      *fail = 1;
-      exec_error(rt,PERR_INDEX_OUT_OF_RANGE);
-      return;
-    }
-    l->arr[index] = value;
+    ObjListAssign(l,index,value);
     *fail = 0;
   } else if(Vis_udata(&object)) {
     struct ObjUdata* udata = Vget_udata(&object);
@@ -804,11 +799,16 @@ void vm_aset( struct Runtime* rt,
   } else if(Vis_list(&object)) {
     size_t index;
     struct ObjList* l = Vget_list(&object);
-    if(ToSize(Vget_number(&object),&index) || index >= l->size) {
-      exec_error(rt,PERR_INDEX_OUT_OF_RANGE);
+    if(Vis_number(&key)) {
+      if(ToSize(Vget_number(&key),&index)) {
+        exec_error(rt,PERR_SIZE_OVERFLOW,Vget_number(&key));
+        *fail = 1;
+      } else {
+        ObjListAssign(l,index,value);
+      }
     } else {
-      l->arr[index] = value;
-      return;
+      exec_error(rt,PERR_ATTRIBUTE_TYPE,"list",ValueGetTypeString(key));
+      *fail = 1;
     }
   } else if(Vis_udata(&object)) {
     struct ObjUdata* udata = Vget_udata(&object);
@@ -823,9 +823,7 @@ void vm_aset( struct Runtime* rt,
         object,
         key,
         value);
-    if(r == MOPS_OK) {
-      *fail = 0;
-    } else {
+    if(r != MOPS_OK) {
       if(r == MOPS_PASS) {
         exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(set));
       }
@@ -973,7 +971,7 @@ int vm_call( struct Runtime* rt , Value tos , int argnum , Value* ret ) {
 }
 
 static SPARROW_INLINE
-Value vm_inew( struct Runtime* rt , Value tos , int* fail ) {
+Value vm_forprep( struct Runtime* rt , Value tos , int* invalid , int* fail ) {
   struct ObjIterator* itr;
   Value ret;
   *fail = 0;
@@ -981,20 +979,25 @@ Value vm_inew( struct Runtime* rt , Value tos , int* fail ) {
     itr = ObjNewIterator(RTSparrow(rt));
     ObjStrIterInit(Vget_str(&tos),itr);
     Vset_iterator(&ret,itr);
+    *invalid = itr->has_next(RTSparrow(rt),itr);
     return ret;
   } else if(Vis_list(&tos)) {
     itr = ObjNewIterator(RTSparrow(rt));
     ObjListIterInit(Vget_list(&tos),itr);
     Vset_iterator(&ret,itr);
+    *invalid = itr->has_next(RTSparrow(rt),itr);
     return ret;
   } else if(Vis_map(&tos)) {
     itr = ObjNewIterator(RTSparrow(rt));
     ObjMapIterInit(Vget_map(&tos),itr);
     Vset_iterator(&ret,itr);
+    *invalid = itr->has_next(RTSparrow(rt),itr);
     return ret;
   } else if(Vis_loop(&tos)) {
-    Vset_loop_iterator(&ret,ObjNewLoopIterator(RTSparrow(rt),
-          Vget_loop(&tos)));
+    struct ObjLoopIterator* litr = ObjNewLoopIterator(RTSparrow(rt),
+        Vget_loop(&tos));
+    Vset_loop_iterator(&ret,litr);
+    *invalid = litr->index >= litr->end;
     return ret;
   } else if(Vis_udata(&tos)) {
     struct ObjUdata* udata = Vget_udata(&tos);
@@ -1011,6 +1014,7 @@ Value vm_inew( struct Runtime* rt , Value tos , int* fail ) {
     if(r == MOPS_OK) {
       *fail = 0;
       Vset_iterator(&ret,itr);
+      *invalid = itr->has_next(RTSparrow(rt),itr);
     } else {
       if(r == MOPS_PASS) {
         exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(iter));
@@ -1050,6 +1054,11 @@ Value vm_gget( struct Runtime* rt , struct ObjStr* key , int* fail ) {
 #define DECODE_ARG() \
   do { \
     opr = CodeBufferDecodeArg(&(proto->code_buf),frame->pc); \
+    frame->pc += 3; \
+  } while(0)
+
+#define SKIP_ARG() \
+  do { \
     frame->pc += 3; \
   } while(0)
 
@@ -2070,7 +2079,7 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
       DECODE_ARG();
       frame->pc = opr;
     } else {
-      frame->pc += 3; /* Skip the argument */
+      SKIP_ARG(); /* Skip the argument */
       pop(thread,1);
     }
     DISPATCH();
@@ -2084,7 +2093,7 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
       DECODE_ARG();
       frame->pc = opr;
     } else {
-      frame->pc += 3; /* Skip the argument */
+      SKIP_ARG(); /* Skip the argument */
       pop(thread,1);
     }
     DISPATCH();
@@ -2421,22 +2430,16 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
   }
 
   /* iterator */
-  CASE(BC_INEW) {
+  CASE(BC_FORPREP) {
+    int invalid;
     tos = top(thread,0);
-    res = vm_inew(rt,tos,check);
-    replace(thread,res);
-    DISPATCH();
-  }
-
-  CASE(BC_INEXT) {
-    struct ObjIterator* itr;
-    tos = top(thread,0);
-    if(Vis_iterator(&tos)) {
-      itr = Vget_iterator(&tos);
-      itr->move(thread->sparrow,itr);
+    res = vm_forprep(rt,tos,&invalid,check);
+    replace(thread,res); /* always push iterator to stack */
+    if(invalid) {
+      DECODE_ARG();
+      frame->pc = opr;   /* jump to end of the loop body */
     } else {
-      struct ObjLoopIterator* litr = Vget_loop_iterator(&tos);
-      litr->index += litr->step;
+      SKIP_ARG();
     }
     DISPATCH();
   }
@@ -2476,21 +2479,28 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
     DISPATCH();
   }
 
-  CASE(BC_ITEST) {
+  CASE(BC_FORLOOP) {
     struct ObjIterator* itr;
     tos = top(thread,0);
     if(Vis_iterator(&tos)) {
       itr = Vget_iterator(&tos);
-      Vset_boolean(&res,itr->has_next(thread->sparrow,itr) == 0);
-      push(thread,res);
+      itr->move(thread->sparrow,itr);
+      if(itr->has_next(thread->sparrow,itr) == 0) {
+        /* go back to the head of the loop */
+        DECODE_ARG();
+        frame->pc = opr;
+      } else {
+        SKIP_ARG();
+      }
     } else {
       struct ObjLoopIterator* litr = Vget_loop_iterator(&tos);
+      litr->index += litr->step; /* move */
       if(litr->index >= litr->end) {
-        Vset_false(&res);
+        SKIP_ARG();
       } else {
-        Vset_true(&res);
+        DECODE_ARG();
+        frame->pc = opr;
       }
-      push(thread,res);
     }
     DISPATCH();
   }
@@ -2615,18 +2625,6 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
 
   /* BC_ICALL_RUNSTRING */
   DO(RUNSTRING,RunString)
-
-  /* BC_ICALL_GCFORCE */
-  DO(GCFORCE,GCForce)
-
-  /* BC_ICALL_GCTRY */
-  DO(GCTRY,GCTry)
-
-  /* BC_ICALL_GCSTAT */
-  DO(GCSTAT,GCStat)
-
-  /* GC_ICALL_GCCONFIG */
-  DO(GCCONFIG,GCConfig)
 
   /* BC_ICALL_MIN */
   DO(MIN,Min)

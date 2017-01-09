@@ -21,12 +21,14 @@ everything is subject to change
 
 # Performance
 
-I didn't do too much benchmark yet but compared to python 2.7 , sparrow is 10%
-faster on recursive call and loop related operations. Since many intrinsice call
-trick is used in Sparrow to reduce dictionary lookup, I believe its performance
-should not be sucky even compared to many other cool scripting engine. In long
-run , Sparrow will feature a JIT compiler , the interpreter part is important but
-I will not spend too much efforts to fine tune it.
+I didn't do too much benchmark yet but compared to python 2.7 only. Sparrow is
+kind of performant in limited benchmark tests, eg : a trivial for loop to sum
+up number ,sparrow is about 2 times faster than python 2.7. Lots of tricks are
+used in Sparrow to reduce dictionary lookup, I believe its performance should
+not be sucky even compared to many other cool scripting engine. In long run ,
+Sparrow will feature a JIT compiler , the interpreter part is important but I
+will not spend too much efforts to improve the interpreter's performance. The
+best bet I guess for interpreter is try to rewrite it in assembly. 
 
 # Blueprint
 

@@ -2,7 +2,19 @@
 #define LIST_H_
 #include "object.h"
 
-void ObjListInit( struct Sparrow* , struct ObjList* , size_t );
+static SPARROW_INLINE
+void ObjListInit( struct Sparrow* sparrow , struct ObjList* list ,
+    size_t cap ) {
+  if(cap == 0) {
+    list->arr = NULL;
+    list->size = list->cap = 0;
+  } else {
+    list->arr = malloc(cap*sizeof(Value));
+    list->size = 0;
+    list->cap = cap;
+  }
+}
+
 
 static SPARROW_INLINE void
 ObjListDestroy( struct ObjList* list ) {
@@ -39,6 +51,10 @@ ObjListIndex( struct ObjList* list , size_t idx ) {
   assert(list->size > idx);
   return list->arr[idx];
 }
+
+/* It will automatically extend the array and assign the value if
+ * we need to do so */
+void ObjListAssign( struct ObjList* list , size_t idx , Value value );
 
 #define ObjListLast(L) ObjListIndex(L,(L)->size-1)
 #define ObjListSize(L) ((L)->size)

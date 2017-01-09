@@ -26,6 +26,9 @@
 #error "Compiler not supported!"
 #endif /* __GNUC__ || __clang__ */
 
+#ifndef SPARROW_REAL_FORMAT_PRECISION
+#define SPARROW_REAL_FORMAT_PRECISION "4"
+#endif /* SPARROW_REAL_FORMAT_PRECISION */
 
 /* Data type size boundary limitation define */
 

@@ -70,7 +70,8 @@ static struct ObjMapEntry* find_entry( struct ObjMap* map , const char* key ,
 static void rehash( struct ObjMap* map ) {
   size_t i;
   struct ObjMap temp_map;
-  ObjMapInit(&temp_map,map->cap*2);
+  size_t ncap = map->cap == 0 ? 2 : map->cap * 2;
+  ObjMapInit(&temp_map,ncap);
   for( i = 0 ; i < map->cap ; ++i ) {
     struct ObjMapEntry* ent = map->entry+i;
     if(ent->used && !ent->del) {
@@ -102,18 +103,6 @@ static void insert( struct ObjMap* map , struct ObjStr* key , uint32_t fhash,
   entry->used = 1;
   ++map->size;
   ++map->scnt;
-}
-
-void ObjMapInit( struct ObjMap* map , size_t capacity ) {
-  if(capacity == 0) {
-    capacity = 2;
-  } else {
-    assert(!(capacity & (capacity-1)));
-  }
-  map->entry = calloc(capacity , sizeof(struct ObjMapEntry) );
-  map->cap = capacity;
-  map->size= 0;
-  map->scnt = 0;
 }
 
 void ObjMapClear( struct ObjMap* map ) {

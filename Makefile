@@ -19,7 +19,7 @@ vm:
 	$(CC) -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/fe/vm_test.c -lm -o vm_test
 
 test:
-	$(CC) -g3 $(DEPENDEND) src/fe/vm_test_driver.c -lm -o vm_test_driver
+	$(CC) -O3 -g3 $(DEPENDEND) src/fe/vm_test_driver.c -lm -o vm_test_driver
 
 .PHONY:clean_coverage
 

@@ -482,14 +482,15 @@ struct Sparrow {
   size_t gc_prevsz; /* Previous GC size */
   size_t gc_generation; /* Generation count of GC */
   size_t gc_threshold ; /* Threshold of GC */
-  float  gc_ratio ; /* GC triggering ratio */
+  double gc_ratio ; /* GC triggering ratio */
   size_t gc_ps_threshold; /* Cached value for gc_ratio * gc_prevsz */
-  float  gc_penalty_ratio; /* GC penalty ratio, when gc_inactive/gc_prevsz
+  double gc_penalty_ratio; /* GC penalty ratio, when gc_inactive/gc_prevsz
                             * is less than this value, a penalty will trigger
                             * which avoid too much frequent GC collection. */
   size_t gc_adjust_threshold;/* threshold after applied penalty if we have
                               * so. This is also a cached value so should update
                               * it accordinly */
+  size_t gc_penalty_times;
 
   /* Parsed file module */
   struct ObjModule mod_list;
@@ -523,7 +524,7 @@ struct Sparrow {
 /* Function for configuring GC trigger formula */
 static SPARROW_INLINE
 void SparrowGCConfig( struct Sparrow* sparrow, size_t threshold ,
-    float  ratio, float penalty_ratio ) {
+    double ratio, double penalty_ratio ) {
   /* Rules out insane value */
   if(ratio < 0 || ratio > 1.0f ||
      penalty_ratio < 0 || penalty_ratio > 1.0f ||
@@ -541,7 +542,7 @@ void SparrowGCConfig( struct Sparrow* sparrow, size_t threshold ,
       (int64_t)(sparrow->gc_adjust_threshold) + diff;
 
     if(penalty_ratio) {
-      float pr = sparrow->gc_inactive/sparrow->gc_prevsz;
+      double pr = sparrow->gc_inactive/sparrow->gc_prevsz;
       assert(pr<=1.0f);
       if(pr <penalty_ratio) {
         sparrow->gc_adjust_threshold =
@@ -549,7 +550,7 @@ void SparrowGCConfig( struct Sparrow* sparrow, size_t threshold ,
       }
     }
   } else if(penalty_ratio) {
-    float pr = sparrow->gc_inactive/sparrow->gc_prevsz;
+    double pr = sparrow->gc_inactive/sparrow->gc_prevsz;
     assert(pr<=1.0f);
     if(pr <penalty_ratio) {
       sparrow->gc_adjust_threshold = (2.0f - pr)*sparrow->gc_adjust_threshold;

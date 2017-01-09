@@ -191,11 +191,6 @@ fail:
 }
 
 void Builtin_RunString( struct Runtime* rt , Value* ret , int* fail );
-void Builtin_GCForce( struct Runtime* rt , Value* ret , int* fail );
-void Builtin_GCTry( struct Runtime* rt , Value* ret, int* fail );
-void Builtin_GCStat(struct Runtime* rt , Value* ret, int* fail );
-void Builtin_GCConfig(struct Runtime* rt , Value* ret , int* fail );
-
 void Builtin_Min( struct Runtime* rt , Value* ret , int* fail );
 void Builtin_Max( struct Runtime* rt , Value* ret , int* fail );
 void Builtin_Sort(struct Runtime* rt , Value* ret , int* fail );
@@ -211,9 +206,9 @@ void Builtin_MSec( struct Runtime* rt , Value* ret , int* fail );
 struct ObjUdata* GCreateListUdata( struct Sparrow* );
 struct ObjUdata* GCreateStringUdata( struct Sparrow* );
 struct ObjUdata* GCreateMapUdata( struct Sparrow* );
+struct ObjUdata* GCreateGCUdata( struct Sparrow* );
 
 /*
-struct ObjUdata* GCreateGCUdata( struct Sparrow* );
 struct ObjUdata* GCreateMetaUdata( struct Sparrow* );
 */
 

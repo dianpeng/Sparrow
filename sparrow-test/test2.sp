@@ -1,1 +1,1 @@
-gc_try();
+gc.try();

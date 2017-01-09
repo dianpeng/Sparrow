@@ -265,7 +265,7 @@ static void swap( struct Sparrow* sparrow ,
 }
 
 void GCForce( struct Sparrow* sparrow ) {
-  float pr;
+  double pr;
   size_t i;
   int64_t active = 0;
   int64_t inactive = 0;
@@ -317,8 +317,14 @@ void GCForce( struct Sparrow* sparrow ) {
   /* update adjust threshold */
   pr = sparrow->gc_inactive / sparrow->gc_prevsz;
   if(pr < sparrow->gc_penalty_ratio) {
-    sparrow->gc_adjust_threshold =
-      (2.0f - pr) * sparrow->gc_adjust_threshold;
+    ++sparrow->gc_penalty_times;
+
+    sparrow->gc_adjust_threshold = sparrow->gc_adjust_threshold +
+      ((1 - pr) / (double)(sparrow->gc_penalty_times)) *
+      sparrow->gc_adjust_threshold;
+
+  } else {
+    sparrow->gc_penalty_times = 0;
   }
 }
 
