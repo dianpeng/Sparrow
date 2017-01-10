@@ -1,5 +1,5 @@
 var l = [];
-var ten_million = 10000;
+var ten_million = 100000;
 var sum = 0;
 
 var start = msec();

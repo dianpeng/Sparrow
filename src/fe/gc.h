@@ -16,9 +16,12 @@
 #define SPARROW_DEFAULT_GC_PENALTY_RATIO 0.3
 #endif /* SPARROW_DEFAULT_GC_PENALTY_RATIO */
 
-/* We have pretty rookie GC and we will optimize it later on.
- * The GC is a stop-world mark&swap GC and have a very simple
- * and straitforward implementation */
+/* We just have a stop-the-world GC, but have a good trigger mechanism . In
+ * generaly , the GC is teaked to avoid potential useless GC try. A useless
+ * GC try means a GC is kicked in but end up without collecting anything.
+ * We have a penalty system to avoid such GC trigger and also we have other
+ * mechanism to avoid GC trigger becomes too lazy which means GC never tries
+ * to kicks in at anytime */
 
 /* helper function to *finalize* an GC manged object. Do not use it if you
  * don't know what it is */
