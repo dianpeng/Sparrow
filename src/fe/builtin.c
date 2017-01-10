@@ -271,9 +271,11 @@ static struct ObjUdata* gvar_dt_uobj_create( struct Sparrow* sparrow ,
   }
   pri->mcall_cb = NULL;
 
-  u->mops.get = gvar_dt_Mget;
-  u->mops.geti = gvar_dt_Mgeti;
-  u->mops.call = gvar_dt_Mcall;
+  u->mops = NewMetaOps();
+
+  u->mops->get = gvar_dt_Mget;
+  u->mops->geti = gvar_dt_Mgeti;
+  u->mops->call = gvar_dt_Mcall;
   return u;
 }
 
@@ -719,8 +721,9 @@ static struct ObjUdata* gvar_general_create( struct Sparrow* sparrow ,
     ObjMapPut(pri->attr,methods[i].name,v);
   }
 
-  udata->mops.get = gvar_general_Mget;
-  udata->mops.geti= gvar_general_Mgeti;
+  udata->mops = NewMetaOps();
+  udata->mops->get = gvar_general_Mget;
+  udata->mops->geti= gvar_general_Mgeti;
   return udata;
 }
 

@@ -180,16 +180,22 @@ METAOPS_LIST(__)
 /* Macro for invoking the meta operations in an object */
 #define INVOKE_METAOPS(TNAME,RT,OPS,NAME,RET,...) \
   do { \
-    if( !Vis_null(&(OPS)->hook_##NAME) ) { \
-      /* TODO:: Add call into the script */ \
-      UNIMPLEMENTED(); \
-    } else { \
-      if( (OPS)->NAME ) { \
-        (RET) = (OPS)->NAME(__VA_ARGS__); \
+    if((OPS)) { \
+      if( !Vis_null(&(OPS)->hook_##NAME) ) { \
+        /* TODO:: Add call into the script */ \
+        UNIMPLEMENTED(); \
       } else { \
-        RuntimeError(RT,PERR_METAOPS_ERROR,TNAME,METAOPS_NAME(NAME)); \
-        (RET) = MOPS_FAIL; \
+        if( (OPS)->NAME ) { \
+          (RET) = (OPS)->NAME(__VA_ARGS__); \
+        } else { \
+          RuntimeError(RT,PERR_METAOPS_ERROR,TNAME,METAOPS_NAME(NAME)); \
+          (RET) = MOPS_FAIL; \
+        } \
       } \
+    } else { \
+      abort(); \
+      RuntimeError(RT,PERR_METAOPS_ERROR,TNAME,METAOPS_NAME(NAME)); \
+      (RET) = MOPS_FAIL; \
     } \
   } while(0)
 
@@ -236,7 +242,7 @@ struct ObjMap {
   size_t size;
   size_t cap;
   struct ObjMapEntry* entry; /* hash entry */
-  struct MetaOps mops; /* meta Operations */
+  struct MetaOps* mops; /* meta Operations */
 };
 
 typedef void (*UdataGCMarkFunction) ( struct ObjUdata* );
@@ -248,7 +254,7 @@ struct ObjUdata {
   CDataDestroyFunction destroy;
   UdataGCMarkFunction mark;
   /* metaops */
-  struct MetaOps mops;
+  struct MetaOps* mops;
 };
 
 struct ObjIterator;
@@ -778,5 +784,14 @@ void ValuePrint( struct Sparrow* , struct StrBuf* , Value v );
 
 /* Create a string iterator */
 void ObjStrIterInit( struct ObjStr* , struct ObjIterator* );
+
+static SPARROW_INLINE struct MetaOps* NewMetaOps() {
+  struct MetaOps* mops = malloc(sizeof(*mops));
+#define __(A,B,C) mops->B = NULL; Vset_null(&(mops->hook_##B));
+  METAOPS_LIST(__)
+#undef __ /* __ */
+  return mops;
+}
+
 
 #endif /* OBJECT_H_ */

@@ -112,6 +112,7 @@ void ObjMapClear( struct ObjMap* map ) {
 }
 
 void ObjMapDestroy( struct ObjMap* map ) {
+  free(map->mops); /* Created on demand */
   free(map->entry);
   map->entry = NULL;
   map->cap = 0;

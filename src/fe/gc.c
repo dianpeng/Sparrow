@@ -45,6 +45,7 @@ void GCFinalizeObj( struct Sparrow* sth, struct GCRef* obj ) {
         struct ObjUdata* udata = gc2obj(obj,struct ObjUdata);
         CStrDestroy(&(udata->name));
         if(udata->destroy) udata->destroy(udata->udata);
+        free(udata->mops);
         free(obj);
       }
       break;
@@ -116,7 +117,7 @@ void GCMarkMap( struct ObjMap* map ) {
       GCMark(e->value);
       GCMarkString( e->key );
     }
-    mark_mops(&(map->mops));
+    if(map->mops) mark_mops(map->mops);
   }
 }
 
@@ -132,7 +133,7 @@ void GCMarkUdata( struct ObjUdata* udata ) {
   if(gcunmarked(udata)) {
     if(udata->mark) udata->mark(udata);
     udata->gc.gc_state = GC_MARKED;
-    mark_mops(&(udata->mops));
+    if(udata->mops) mark_mops(udata->mops);
   }
 }
 

@@ -59,15 +59,6 @@ int ConstAddString( struct ObjProto* oc , struct ObjStr* str ) {
   return (int)(oc->str_size-1);
 }
 
-static SPARROW_INLINE void metaops_init( struct MetaOps* mops ) {
-
-#define __(A,B,C) mops->B = NULL; Vset_null(&(mops->hook_##B));
-
-  METAOPS_LIST(__)
-
-#undef __ /* __ */
-}
-
 /* String is *not* pooling in our implementation */
 #define add_gcobject(TH,OBJ,TYPE) \
   do { \
@@ -85,7 +76,7 @@ static SPARROW_INLINE void metaops_init( struct MetaOps* mops ) {
     (OBJ)->gc.gc_state = GC_UNMARKED; \
     (OBJ)->gc.next = NULL; \
     (OBJ)->gc.gtype = (TYPE); \
-    metaops_init(&(OBJ)->mops); \
+    (OBJ)->mops = NULL; \
   } while(0)
 
 struct ObjMethod* ObjNewMethodNoGC( struct Sparrow* sth , CMethod method ,
@@ -123,7 +114,6 @@ struct ObjMap* ObjNewMapNoGC( struct Sparrow* sth ,
   struct ObjMap* ret = malloc(sizeof(*ret));
   add_gcobject(sth,ret,VALUE_MAP);
   ObjMapInit(ret,cap);
-  metaops_init(&(ret->mops));
   return ret;
 }
 
@@ -144,7 +134,7 @@ struct ObjUdata* ObjNewUdataNoGC( struct Sparrow* sth ,
   ret->udata= udata;
   ret->destroy = destroy_func;
   ret->mark = mark_func;
-  metaops_init(&(ret->mops));
+  ret->mops = NULL;
   return ret;
 }
 
@@ -359,7 +349,7 @@ size_t ValueSize( struct Runtime* rt , Value v , int* fail ) {
     size_t sz;
     INVOKE_METAOPS(udata->name.str,
         rt,
-        &(udata->mops),
+        udata->mops,
         size,
         r,
         RTSparrow(rt),
@@ -442,7 +432,7 @@ void ValuePrint( struct Sparrow* sth, struct StrBuf* buf ,
     enum MetaStatus r;
 
     INVOKE_METAOPS(udata->name.str,sth->runtime,
-        &(udata->mops),
+        udata->mops,
         print,
         r,
         sth,
@@ -510,7 +500,8 @@ static enum MetaStatus ifunc_wrapper( struct Sparrow* sparrow ,
 static struct ObjUdata* create_ifunc_udata( struct Sparrow* sparrow ,
     IntrinsicCall func , const char* name ) {
   struct ObjUdata* udata = ObjNewUdataNoGC(sparrow,name,func,NULL,NULL);
-  udata->mops.call = ifunc_wrapper;
+  udata->mops = NewMetaOps();
+  udata->mops->call = ifunc_wrapper;
   return udata;
 }
 
@@ -880,7 +871,7 @@ double ValueToNumber( struct Runtime* rt , Value obj ,
     enum MetaStatus r;
     INVOKE_METAOPS(udata->name.str,
         rt,
-        &(udata->mops),
+        udata->mops,
         to_number,
         r,
         RTSparrow(rt),
@@ -920,7 +911,7 @@ struct ObjStr* ValueToString( struct Runtime* rt , Value obj ,
         enum MetaStatus r;
         INVOKE_METAOPS(udata->name.str,
             rt,
-            &(udata->mops),
+            udata->mops,
             to_str,
             r,
             RTSparrow(rt),
@@ -964,7 +955,7 @@ int ValueToBoolean( struct Runtime* runtime , Value v ) {
 
     INVOKE_METAOPS(udata->name.str,
         runtime,
-        &(udata->mops),
+        udata->mops,
         to_boolean,
         r,
         RTSparrow(runtime),

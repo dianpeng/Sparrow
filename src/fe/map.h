@@ -14,6 +14,7 @@ void ObjMapInit( struct ObjMap* map , size_t capacity ) {
   map->cap = capacity;
   map->size= 0;
   map->scnt = 0;
+  map->mops= NULL;
 }
 
 void ObjMapPut( struct ObjMap* , struct ObjStr* key , Value val );

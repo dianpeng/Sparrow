@@ -16,7 +16,7 @@ parser:
 	$(CC) -g3 $(DEPENDEND) src/fe/parser_test.c -lm -o parser-test
 
 vm:
-	$(CC) -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/fe/vm_test.c -lm -o vm_test
+	$(CC) -O3 -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/fe/vm_test.c -lm -o vm_test
 
 test:
 	$(CC) -O3 -g3 $(DEPENDEND) src/fe/vm_test_driver.c -lm -o vm_test_driver
