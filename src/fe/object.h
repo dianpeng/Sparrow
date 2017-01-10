@@ -119,11 +119,11 @@ enum MetaStatus {
 /* Msic functions */
 typedef enum MetaStatus (*MetaCall) ( struct Sparrow* , Value , Value* );
 typedef enum MetaStatus (*MetaGetI) ( struct Sparrow* , Value ,
-    enum IntrinsicAttribute ,Value*);
+    enum IntrinsicAttribute ,Value* );
 typedef enum MetaStatus (*MetaGet ) ( struct Sparrow* , Value , Value , Value* );
 typedef enum MetaStatus (*MetaSet ) ( struct Sparrow* , Value , Value , Value  );
 typedef enum MetaStatus (*MetaSetI) ( struct Sparrow* , Value ,
-    enum IntrinsicAttribute ,Value);
+    enum IntrinsicAttribute ,Value );
 typedef enum MetaStatus (*MetaHash) ( struct Sparrow* , Value , int32_t* );
 typedef enum MetaStatus (*MetaKey ) ( struct Sparrow* , Value , Value* );
 typedef enum MetaStatus (*MetaExist)( struct Sparrow* , Value , Value* );
@@ -178,7 +178,7 @@ METAOPS_LIST(__)
 #define METAOPS_NAME(NAME) MetaOpsName_##NAME
 
 /* Macro for invoking the meta operations in an object */
-#define INVOKE_METAOPS(TNAME,RT,OPS,NAME,RET,...) \
+#define INVOKE_METAOPS(TNAME,RT,OPS,NAME,RET,SP,OBJ,...) \
   do { \
     if((OPS)) { \
       if( !Vis_null(&(OPS)->hook_##NAME) ) { \
@@ -186,7 +186,7 @@ METAOPS_LIST(__)
         UNIMPLEMENTED(); \
       } else { \
         if( (OPS)->NAME ) { \
-          (RET) = (OPS)->NAME(__VA_ARGS__); \
+          (RET) = (OPS)->NAME(SP,OBJ,__VA_ARGS__); \
         } else { \
           RuntimeError(RT,PERR_METAOPS_ERROR,TNAME,METAOPS_NAME(NAME)); \
           (RET) = MOPS_FAIL; \

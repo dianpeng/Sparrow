@@ -100,4 +100,15 @@ void RuntimeError( struct Runtime* rt , const char* format , ... );
 int Execute( struct Sparrow* , struct ObjComponent* , Value* ,
     struct CStr* error );
 
+/* Push argument onto the stack , this is the prelog of calling a script
+ * side function */
+int PushArg( struct Sparrow* , Value arg );
+
+/* Execute a specific ObjClosure script function. This function is used
+ * to allow C code to execute a script function. Before calling the function,
+ * user *MUST* push the argument onto the stack by calling PushArg function
+ * and the argnum passed into the CallFunc *MUST* match the function call
+ * of PushArg */
+int CallFunc( struct Sparrow* , Value func , int argnum, Value* );
+
 #endif /* VM_H_ */

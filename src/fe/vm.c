@@ -25,6 +25,11 @@ void pop( struct CallThread* frame , size_t narg ) {
 #define pop(THREAD,NARG) do { ((THREAD)->stack_size-=(NARG)); } while(0)
 #endif /* NDEBUG */
 
+/* Used to indicate that the current function is *called* via a C function
+ * so once the interpreter finish *current frame*, it should return to the
+ * C caller function */
+#define RETURN_TO_HOST -1
+
 static void exec_error( struct Runtime* , const char* , ... );
 
 static SPARROW_INLINE
@@ -917,8 +922,13 @@ int del_callframe( struct Runtime* rt ) {
   /* restore the previous stack_size via base_ptr */
   thread->stack_size = RTCurFrame(rt)->base_ptr;
   --thread->frame_size;
-  if(thread->frame_size > 0) return 0;
-  else return -1;
+  if(current_frame(thread)->base_ptr == RETURN_TO_HOST)
+    return -1; /* Caller is a C function, return to C */
+  else if(thread->frame_size > 0)
+    return 0;
+  else
+    return -1; /* We don't have any frame in callstack , so
+                * return to the outer most caller in C */
 }
 
 enum {
@@ -2750,9 +2760,11 @@ int Execute( struct Sparrow* sp, struct ObjComponent* component ,
   struct CallFrame* frame;
   struct ObjClosure* main_closure = NULL;
   int stat;
+
   /* initialize the runtime object */
   runtime_init(sp,&rt,component);
-  frame = rt.cur_thread->frame; /* First frame */
+  frame = rt.cur_thread->frame;
+
   /* setup the first callframe */
   main_closure = ObjNewClosureNoGC(sp,m);
   frame->base_ptr = 0;
@@ -2761,11 +2773,47 @@ int Execute( struct Sparrow* sp, struct ObjComponent* component ,
   frame->narg = 0;
   Vset_null(&(frame->callable));
   rt.cur_thread->frame_size = 1;
+
   /* run the code */
   stat = vm_main( &rt, ret );
+
   /* set error string */
   *error = rt.error;
+
   /* clean our stuff */
   runtime_destroy(sp,&rt);
   return stat;
+}
+
+int PushArg( struct Sparrow* sparrow , Value value ) {
+  struct Runtime* runtime = sparrow->runtime;
+  struct CallThread* thread = RTCallThread(runtime);
+  push(thread,value);
+}
+
+int CallFunc( struct Sparrow* sparrow , Value func ,
+    int argnum, Value* ret ) {
+  struct Runtime* runtime = sparrow->runtime;
+  struct CallFrame* frame = RTCurFrame(runtime);
+  int rstat;
+
+  assert(runtime);
+  assert(frame->closure);
+  assert(argnum >= 0);
+
+  rstat = vm_call( runtime , func , argnum , ret );
+
+  switch(rstat) {
+    case CFUNC:
+      return 0;
+    case CALLERROR:
+      return -1;
+    default:
+      assert(frame->base_ptr == 0);
+      frame->base_ptr = RETURN_TO_HOST;
+      rstat = vm_main(runtime,ret);
+      assert(frame->base_ptr == RETURN_TO_HOST);
+      frame->base_ptr = 0;
+      return rstat;
+  }
 }
