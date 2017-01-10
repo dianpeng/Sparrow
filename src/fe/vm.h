@@ -12,10 +12,10 @@ struct CallFrame;
 struct CallThread;
 
 struct CallFrame {
-  int base_ptr; /* base pointer */
-  size_t pc;    /* program counter */
+  int base_ptr;   /* base pointer */
+  size_t pc;      /* program counter */
   struct ObjClosure* closure; /* closure */
-  size_t narg;  /* argument count */
+  size_t narg;    /* argument count */
   Value callable; /* callable value, can be ObjMethod or ObjUdata */
 };
 

@@ -941,6 +941,8 @@ int vm_call( struct Runtime* rt , Value tos , int argnum , Value* ret ) {
   } else if(Vis_udata(&tos)) {
     struct ObjUdata* udata = Vget_udata(&tos);
     enum MetaStatus r;
+    if(add_callframe(rt,argnum,NULL,tos)) return -1;
+
     INVOKE_METAOPS(udata->name.str,
         rt,
         (udata->mops),
