@@ -922,13 +922,14 @@ int del_callframe( struct Runtime* rt ) {
   /* restore the previous stack_size via base_ptr */
   thread->stack_size = RTCurFrame(rt)->base_ptr;
   --thread->frame_size;
-  if(current_frame(thread)->base_ptr == RETURN_TO_HOST)
-    return -1; /* Caller is a C function, return to C */
-  else if(thread->frame_size > 0)
+  if(thread->frame_size > 0) {
+    if(current_frame(thread)->base_ptr== RETURN_TO_HOST)
+      return -1;
     return 0;
-  else
+  } else {
     return -1; /* We don't have any frame in callstack , so
                 * return to the outer most caller in C */
+  }
 }
 
 enum {
