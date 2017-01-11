@@ -8,14 +8,6 @@
 #include "../util.h"
 #include "bc.h"
 
-#ifndef SPARROW_DEFAULT_FUNCCALL_SIZE
-#define SPARROW_DEFAULT_FUNCCALL_SIZE 1024
-#endif /* SPARROW_DEFAULT_FUNCCALL_SIZE */
-
-#ifndef SPARROW_DEFAULT_STACK_SIZE
-#define SPARROW_DEFAULT_STACK_SIZE 1024*128
-#endif /* SPARROW_DEFAULT_STACK_SIZE */
-
 struct Sparrow;
 struct ObjModule;
 struct Runtime;

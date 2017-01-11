@@ -4,18 +4,6 @@
 #include "object.h"
 #include <stdio.h>
 
-#ifndef SPARROW_DEFAULT_GC_THRESHOLD
-#define SPARROW_DEFAULT_GC_THRESHOLD 25000
-#endif /* SPARROW_DEFAULT_GC_THRESHOLD */
-
-#ifndef SPARROW_DEFAULT_GC_RATIO
-#define SPARROW_DEFAULT_GC_RATIO 0.5
-#endif /* SPARROW_DEFAULT_GC_RATIO */
-
-#ifndef SPARROW_DEFAULT_GC_PENALTY_RATIO
-#define SPARROW_DEFAULT_GC_PENALTY_RATIO 0.3
-#endif /* SPARROW_DEFAULT_GC_PENALTY_RATIO */
-
 /* We just have a stop-the-world GC, but have a good trigger mechanism . In
  * generaly , the GC is teaked to avoid potential useless GC try. A useless
  * GC try means a GC is kicked in but end up without collecting anything.

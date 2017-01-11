@@ -895,8 +895,8 @@ int add_callframe( struct Runtime* rt ,int argnum ,
     struct ObjClosure* cls , Value tos ) {
   struct CallThread* thread = RTCallThread(rt);
   struct CallFrame* frame;
-  if(thread->frame_size == thread->frame_cap) {
-    if(thread->frame_size >= rt->max_funccall) {
+  if(SP_UNLIKELY(thread->frame_size == thread->frame_cap)) {
+    if(SP_UNLIKELY(thread->frame_size >= rt->max_funccall)) {
       exec_error(rt,PERR_TOO_MANY_FUNCCALL);
       return -1;
     } else {
@@ -2789,7 +2789,7 @@ int Execute( struct Sparrow* sp, struct ObjComponent* component ,
 int PushArg( struct Sparrow* sparrow , Value value ) {
   struct Runtime* runtime = sparrow->runtime;
   struct CallThread* thread = RTCallThread(runtime);
-  push(thread,value);
+  return push(thread,value);
 }
 
 int CallFunc( struct Sparrow* sparrow , Value func ,
