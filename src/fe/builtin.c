@@ -482,8 +482,8 @@ static int string_slice( struct Sparrow* sth , Value obj , Value* ret ) {
 
   assert( Vis_udata(&obj) );
   if(RuntimeCheckArg(runtime,"slice",3,ARG_STRING,
-                                              ARG_CONV_NUMBER,
-                                              ARG_CONV_NUMBER))
+                                       ARG_CONV_NUMBER,
+                                       ARG_CONV_NUMBER))
     return -1;
   a1 = RuntimeGetArg(runtime,0);
   a2 = RuntimeGetArg(runtime,1);

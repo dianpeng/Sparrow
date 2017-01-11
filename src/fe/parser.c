@@ -1584,8 +1584,7 @@ static int parse_break( struct Parser* p ) {
        * but we may have sevaral local variables declaraed
        * in each nested lexical scope. We need to pop them
        * before the jump */
-      int narg =
-        p->closure->cur_scp->cur_idx - lscp->cur_idx;
+      int narg = p->closure->cur_scp->cur_idx - lscp->cur_idx;
       cbA(BC_POP,narg);
       lscp->bjmp[lscp->bjmp_sz] = cbputA();
       ++lscp->bjmp_sz;
