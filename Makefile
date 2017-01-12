@@ -13,13 +13,13 @@ object:
 	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/fe/object_test.c  -lm -o object-test
 
 parser:
-	$(CC) -g3 $(DEPENDEND) src/fe/parser_test.c -lm -o parser-test
+	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/fe/parser_test.c -lm -o parser-test
 
 vm:
-	$(CC) -O3 -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/fe/vm_test.c -lm -o vm_test
+	$(CC) -O3 -Wall -Werror -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/fe/vm_test.c -lm -o vm-test
 
 test:
-	$(CC) -O3 -g3 $(DEPENDEND) src/fe/vm_test_driver.c -lm -o vm_test_driver
+	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) src/fe/vm_test_driver.c -lm -o vm-test-driver
 
 .PHONY:clean_coverage
 

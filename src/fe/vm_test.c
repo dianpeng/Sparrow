@@ -10,11 +10,13 @@
 
 #define STRINGIFY(...) #__VA_ARGS__
 
+#if 0
 static uint64_t now_in_microseconds() {
   struct timeval tv;
   gettimeofday(&tv,NULL);
   return tv.tv_sec * 1000000 + tv.tv_usec;
 }
+#endif
 
 /* A list formatter with format string
  * Format string:
@@ -253,11 +255,13 @@ static Value createV(struct Sparrow* sparrow , const char* format ,
   return ret;
 }
 
+#if 0
 static Value create( struct Sparrow* sparrow , const char* format , ... ) {
   va_list vl;
   va_start(vl,format);
   return createV(sparrow,format,vl);
 }
+#endif
 
 /* Execute a specific code */
 static void run_code( struct Sparrow* sparrow , const char* src ,
@@ -280,6 +284,8 @@ static void run_code( struct Sparrow* sparrow , const char* src ,
     }
   }
 }
+
+#if 0
 
 static void dump_code( const char* src ) {
   struct Sparrow sparrow;
@@ -310,6 +316,8 @@ static void benchmark( const char* src ) {
   end = now_in_microseconds();
   fprintf(stderr,"%lld\n",(long long int)(end-start));
 }
+
+#endif
 
 static void compare_value( Value, Value);
 
