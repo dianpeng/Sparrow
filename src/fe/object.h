@@ -200,9 +200,7 @@ struct ObjStr {
   uint32_t more : 1 ;
 };
 
-typedef int (*CMethod)( struct Sparrow* ,
-    Value ,
-    Value* );
+typedef int (*CMethod)( struct Sparrow* , Value , Value* );
 
 struct ObjMethod {
   DEFINE_GCOBJECT; /* GC object */
@@ -475,13 +473,13 @@ struct Sparrow {
   size_t gc_sz; /* Size of the GC objects list */
 
   /* GC tune parameters */
-  size_t gc_active; /* Last round of GC's active count */
+  size_t gc_active;   /* Last round of GC's active count */
   size_t gc_inactive; /* Last round of GC's inactive count */
-  size_t gc_prevsz; /* Previous GC size */
+  size_t gc_prevsz;   /* Previous GC size */
   size_t gc_generation; /* Generation count of GC */
   size_t gc_threshold ; /* Threshold of GC */
-  double gc_ratio ; /* GC triggering ratio */
-  size_t gc_ps_threshold; /* Cached value for gc_ratio * gc_prevsz */
+  double gc_ratio ;     /* GC triggering ratio */
+  size_t gc_ps_threshold;  /* Cached value for gc_ratio * gc_prevsz */
   double gc_penalty_ratio; /* GC penalty ratio, when gc_inactive/gc_prevsz
                             * is less than this value, a penalty will trigger
                             * which avoid too much frequent GC collection. */
@@ -551,7 +549,8 @@ void SparrowGCConfig( struct Sparrow* sparrow, size_t threshold ,
     double pr = sparrow->gc_inactive/sparrow->gc_prevsz;
     assert(pr<=1.0f);
     if(pr <penalty_ratio) {
-      sparrow->gc_adjust_threshold = (2.0f - pr)*sparrow->gc_adjust_threshold;
+      sparrow->gc_adjust_threshold =
+        (2.0f - pr)*sparrow->gc_adjust_threshold;
     }
   }
 }
