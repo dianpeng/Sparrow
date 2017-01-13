@@ -170,7 +170,7 @@ void Builtin_Exist(struct Runtime* rt , Value* v , int* f ){
     char buf[246]; \
     sprintf(buf,"%s.%s",(OBJNAME),#MNAME); \
     if(RuntimeCheckArg(RT,buf,__VA_ARGS__)) \
-      return MOPS_FAIL; \
+      return -1; \
   } while(0);
 
 /* This function pointer is used to create a value which is called during
@@ -184,25 +184,7 @@ struct gvar_dt_pri {
   MCallCallback mcall_cb;
 };
 
-static enum MetaStatus gvar_dt_Mcall( struct Sparrow* sparrow , Value udata ,
-    Value* ret ) {
-  struct Runtime* rt = sparrow->runtime;
-  struct ObjUdata* ud = Vget_udata(&udata);
-  struct gvar_dt_pri* pri= (struct gvar_dt_pri*)(ud->udata);
-  assert(rt);
-  if(pri->mcall_cb) {
-    /* Meta callback function */
-    if(pri->mcall_cb(rt,ret)) {
-      return MOPS_FAIL;
-    } else {
-      return MOPS_OK;
-    }
-  }
-  RuntimeError(rt,PERR_METAOPS_ERROR,ud->name.str,METAOPS_NAME(call));
-  return MOPS_FAIL;
-}
-
-static enum MetaStatus gvar_dt_Mget( struct Sparrow* sparrow , Value udata ,
+static int gvar_dt_Mget( struct Sparrow* sparrow , Value udata ,
     Value key , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
   struct ObjUdata* u = Vget_udata(&udata);
@@ -213,24 +195,24 @@ static enum MetaStatus gvar_dt_Mget( struct Sparrow* sparrow , Value udata ,
     enum IntrinsicAttribute iattr = IAttrGetIndex(k->str);
     if(iattr == SIZE_OF_IATTR) {
       RuntimeError(runtime,PERR_TYPE_NO_ATTRIBUTE,u->name.str,k->str);
-      return MOPS_FAIL;
+      return -1;
     }
     *ret = pri->method[iattr];
-    return MOPS_OK;
+    return 0;
   } else {
     RuntimeError(runtime,PERR_ATTRIBUTE_TYPE,u->name.str,
         ValueGetTypeString(key));
-    return MOPS_FAIL;
+    return -1;
   }
 }
 
-static enum MetaStatus gvar_dt_Mgeti( struct Sparrow* sparrow , Value udata ,
+static int gvar_dt_Mgeti( struct Sparrow* sparrow , Value udata ,
     enum IntrinsicAttribute iattr , Value* ret ) {
   struct ObjUdata* u = Vget_udata(&udata);
   struct gvar_dt_pri* pri = (struct gvar_dt_pri*)(u->udata);
   UNUSE_ARG(sparrow);
   *ret = pri->method[iattr];
-  return MOPS_OK;
+  return 0;
 }
 
 static void gvar_dt_Mmark( struct ObjUdata* udata ) {
@@ -255,7 +237,7 @@ static struct ObjUdata* gvar_dt_uobj_create( struct Sparrow* sparrow ,
     struct cmethod_ptr* methods ) {
   struct gvar_dt_pri* pri = malloc(sizeof(*pri));
   struct ObjUdata* u = ObjNewUdataNoGC(sparrow,objname,pri,
-      gvar_dt_Mmark,gvar_dt_Mdestroy);
+      gvar_dt_Mmark,gvar_dt_Mdestroy,NULL);
   size_t i;
   Value self;
 
@@ -275,7 +257,6 @@ static struct ObjUdata* gvar_dt_uobj_create( struct Sparrow* sparrow ,
 
   u->mops->get = gvar_dt_Mget;
   u->mops->geti = gvar_dt_Mgeti;
-  u->mops->call = gvar_dt_Mcall;
   return u;
 }
 
@@ -655,7 +636,7 @@ struct gvar_general_pri {
   AttrHook hook;
 };
 
-static enum MetaStatus gvar_general_Mget( struct Sparrow* sparrow , Value object ,
+static int gvar_general_Mget( struct Sparrow* sparrow , Value object ,
     Value key , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
   struct ObjUdata* udata  = Vget_udata(&object);
@@ -663,30 +644,41 @@ static enum MetaStatus gvar_general_Mget( struct Sparrow* sparrow , Value object
   if(Vis_str(&key)) {
     if(pri->hook) {
       if(pri->hook(sparrow,udata,Vget_str(&key),ret)) goto retry;
-      return MOPS_OK;
+      return 0;
     } else {
 retry:
       if(ObjMapFind(pri->attr,Vget_str(&key),ret)) {
         RuntimeError(runtime,PERR_TYPE_NO_ATTRIBUTE,udata->name.str,
             Vget_str(&key)->str);
-        return MOPS_FAIL;
+        return -1;
       } else {
-        return MOPS_OK;
+        return 0;
       }
     }
   } else {
     RuntimeError(runtime,PERR_ATTRIBUTE_TYPE,ValueGetTypeString(key));
-    return MOPS_FAIL;
+    return -1;
   }
 }
 
-static enum MetaStatus gvar_general_Mgeti( struct Sparrow* sparrow , Value object ,
+static int gvar_general_Mgeti( struct Sparrow* sparrow , Value object ,
     enum IntrinsicAttribute iattr , Value* ret ) {
-  UNUSE_ARG(sparrow);
-  UNUSE_ARG(object);
-  UNUSE_ARG(iattr);
-  UNUSE_ARG(ret);
-  return MOPS_PASS;
+  struct Runtime* runtime = sparrow->runtime;
+  struct ObjUdata* udata  = Vget_udata(&object);
+  struct gvar_general_pri* pri = (struct gvar_general_pri*)(udata->udata);
+  struct ObjStr* key = IAttrGetObjStr(sparrow,iattr);
+  if(pri->hook) {
+    if(pri->hook(sparrow,udata,key,ret)) goto retry;
+    return 0;
+  } else {
+retry:
+    if(ObjMapFind(pri->attr,key,ret)) {
+      RuntimeError(runtime,PERR_TYPE_NO_ATTRIBUTE,udata->name.str,key->str);
+      return -1;
+    } else {
+      return 0;
+    }
+  }
 }
 
 static void gvar_general_Mmark( struct ObjUdata* udata ) {
@@ -707,7 +699,8 @@ static struct ObjUdata* gvar_general_create( struct Sparrow* sparrow ,
   struct gvar_general_pri* pri = malloc(sizeof(*pri));
   struct ObjUdata* udata = ObjNewUdataNoGC(sparrow,name,pri,
       gvar_general_Mmark,
-      gvar_general_Mdestroy);
+      gvar_general_Mdestroy,
+      NULL);
   size_t i;
 
   pri->attr = ObjNewMapNoGC(sparrow,32);
@@ -856,13 +849,17 @@ static int gc_config( struct Sparrow* sparrow , Value obj , Value* ret ) {
 
 struct ObjUdata* GCreateGCUdata( struct Sparrow* sparrow ) {
   struct cmethod_ptr methods[4];
+#define STRING_LEN(X) (X), STRING_SIZE((X))
+
   methods[0].ptr = gc_try;
-  methods[0].name = ObjNewStrNoGC(sparrow,"try",STRING_SIZE("try"));
+  methods[0].name = ObjNewStrNoGC(sparrow,STRING_LEN("try"));
   methods[1].ptr = gc_force;
-  methods[1].name = ObjNewStrNoGC(sparrow,"force",STRING_SIZE("force"));
+  methods[1].name = ObjNewStrNoGC(sparrow,STRING_LEN("force"));
   methods[2].ptr = gc_stat;
-  methods[2].name = ObjNewStrNoGC(sparrow,"stat",STRING_SIZE("stat"));
+  methods[2].name = ObjNewStrNoGC(sparrow,STRING_LEN("stat"));
   methods[3].ptr = gc_config;
-  methods[3].name = ObjNewStrNoGC(sparrow,"config",STRING_SIZE("config"));
+  methods[3].name = ObjNewStrNoGC(sparrow,STRING_LEN("config"));
+
+#undef STRING_LEN /* STRING_LEN */
   return gvar_general_create(sparrow,"gc",gc_attr_hook,methods,4);
 }

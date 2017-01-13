@@ -127,13 +127,15 @@ struct ObjUdata* ObjNewUdataNoGC( struct Sparrow* sth ,
     const char* name,
     void* udata,
     UdataGCMarkFunction mark_func,
-    CDataDestroyFunction destroy_func ) {
+    CDataDestroyFunction destroy_func,
+    UdataCall call_func ) {
   struct ObjUdata* ret = malloc(sizeof(*ret));
   add_gcobject(sth,ret,VALUE_UDATA);
   ret->name = CStrDup(name);
   ret->udata= udata;
   ret->destroy = destroy_func;
   ret->mark = mark_func;
+  ret->call = call_func;
   ret->mops = NULL;
   return ret;
 }
@@ -142,9 +144,10 @@ struct ObjUdata* ObjNewUdata( struct Sparrow* sth ,
     const char* name ,
     void* udata,
     UdataGCMarkFunction mark_func,
-    CDataDestroyFunction destroy_func ) {
+    CDataDestroyFunction destroy_func,
+    UdataCall call_func ) {
   GCTry(sth);
-  return ObjNewUdataNoGC(sth,name,udata,mark_func,destroy_func);
+  return ObjNewUdataNoGC(sth,name,udata,mark_func,destroy_func,call_func);
 }
 
 struct ObjProto* ObjNewProtoNoGC( struct Sparrow* sth ,
@@ -340,12 +343,27 @@ size_t ValueSize( struct Runtime* rt , Value v , int* fail ) {
   if(Vis_list(&v)) {
     return Vget_list(&v)->size;
   } else if(Vis_map(&v)) {
-    return Vget_map(&v)->size;
+    struct ObjMap* map = Vget_map(&v);
+    if(map->mops) {
+      int r;
+      size_t sz;
+      INVOKE_METAOPS("map",
+          rt,
+          map->mops,
+          size,
+          r,
+          RTSparrow(rt),
+          v,
+          &sz);
+      if(r == 0) return sz;
+    } else {
+      return map->size;
+    }
   } else if(Vis_str(&v)) {
     return Vget_str(&v)->len;
   } else if(Vis_udata(&v)) {
     struct ObjUdata* udata = Vget_udata(&v);
-    enum MetaStatus r;
+    int r;
     size_t sz;
     INVOKE_METAOPS(udata->name.str,
         rt,
@@ -355,7 +373,7 @@ size_t ValueSize( struct Runtime* rt , Value v , int* fail ) {
         RTSparrow(rt),
         v,
         &sz);
-    if(r == MOPS_OK) return sz;
+    if(r == 0) return sz;
   }
   RuntimeError(rt,PERR_METAOPS_ERROR,ValueGetTypeString(v),METAOPS_NAME(size));
   *fail = 1;
@@ -406,7 +424,21 @@ void ValuePrint( struct Sparrow* sth, struct StrBuf* buf ,
   } else if(Vis_list(&v)) {
     list_print(sth,buf,Vget_list(&v));
   } else if(Vis_map(&v)) {
-    map_print(sth,buf,Vget_map(&v));
+    struct ObjMap* map = Vget_map(&v);
+    if(map->mops) {
+      int r;
+      INVOKE_METAOPS("map",sth->runtime,
+          map->mops,
+          print,
+          r,
+          sth,
+          v,
+          buf);
+      if(r) goto map_print;
+    } else {
+map_print:
+      map_print(sth,buf,Vget_map(&v));
+    }
   } else if(Vis_proto(&v)) {
     struct ObjProto* proto = Vget_proto(&v);
     StrBufAppendF(buf,"proto(argument:%zu,prototype:%s,module:%p,file:%s)",
@@ -429,17 +461,18 @@ void ValuePrint( struct Sparrow* sth, struct StrBuf* buf ,
     StrBufDestroy(&temp);
   } else if(Vis_udata(&v)) {
     struct ObjUdata* udata = Vget_udata(&v);
-    enum MetaStatus r;
-
-    INVOKE_METAOPS(udata->name.str,sth->runtime,
-        udata->mops,
-        print,
-        r,
-        sth,
-        v,
-        buf);
-
-    if( r != MOPS_OK ) {
+    if(udata->mops) {
+      int r;
+      INVOKE_METAOPS(udata->name.str,sth->runtime,
+          udata->mops,
+          print,
+          r,
+          sth,
+          v,
+          buf);
+      if(r) goto udata_print;
+    } else {
+udata_print:
       /* If the provided one cannot do print, we just do it by ourself */
       StrBufAppendF(buf,"udata(%s)",udata->name.str);
     }
@@ -478,9 +511,8 @@ void ValuePrint( struct Sparrow* sth, struct StrBuf* buf ,
 
 /* function wrapper for adapting __call to intrinsic function
  * prototype */
-static enum MetaStatus ifunc_wrapper( struct Sparrow* sparrow ,
-    Value object, Value* ret ) {
-  struct ObjUdata* udata = Vget_udata(&object);
+static int ifunc_wrapper( struct Sparrow* sparrow ,
+    struct ObjUdata* udata , Value* ret ) {
   IntrinsicCall func = (IntrinsicCall)(udata->udata);
   int fail;
   assert(func);
@@ -488,9 +520,9 @@ static enum MetaStatus ifunc_wrapper( struct Sparrow* sparrow ,
 
   func(sparrow->runtime,ret,&fail);
   if( fail ) {
-    return MOPS_FAIL;
+    return -1;
   } else {
-    return MOPS_OK;
+    return 0;
   }
 }
 
@@ -499,9 +531,9 @@ static enum MetaStatus ifunc_wrapper( struct Sparrow* sparrow ,
  * their value and capture them in variable */
 static struct ObjUdata* create_ifunc_udata( struct Sparrow* sparrow ,
     IntrinsicCall func , const char* name ) {
-  struct ObjUdata* udata = ObjNewUdataNoGC(sparrow,name,func,NULL,NULL);
+  struct ObjUdata* udata = ObjNewUdataNoGC(sparrow,name,func,NULL,NULL,NULL);
   udata->mops = NewMetaOps();
-  udata->mops->call = ifunc_wrapper;
+  udata->call = ifunc_wrapper;
   return udata;
 }
 
@@ -868,7 +900,7 @@ double ValueToNumber( struct Runtime* rt , Value obj ,
   } else if(Vis_udata(&obj)) {
     struct ObjUdata* udata = Vget_udata(&obj);
     Value v;
-    enum MetaStatus r;
+    int r;
     INVOKE_METAOPS(udata->name.str,
         rt,
         udata->mops,
@@ -877,12 +909,8 @@ double ValueToNumber( struct Runtime* rt , Value obj ,
         RTSparrow(rt),
         obj,
         &v);
-    if(r == MOPS_OK) ret = Vget_number(&v);
+    if(r == 0) ret = Vget_number(&v);
     else {
-      if(r == MOPS_PASS) {
-        RuntimeError(rt,PERR_METAOPS_DEFAULT,udata->name.str,
-            METAOPS_NAME(to_number));
-      }
       *fail = 1;
       return ret;
     }
@@ -900,33 +928,29 @@ struct ObjStr* ValueToString( struct Runtime* rt , Value obj ,
   struct ObjStr* ret = NULL;
   if(Vis_str(&obj)) {
     ret = Vget_str(&obj);
+  } else if(Vis_udata(&obj)) {
+    struct ObjUdata* udata = Vget_udata(&obj);
+    Value v;
+    int r;
+    INVOKE_METAOPS(udata->name.str,
+        rt,
+        udata->mops,
+        to_str,
+        r,
+        RTSparrow(rt),
+        obj,
+        &v);
+    if(r == 0) ret = Vget_str(&v);
+    else {
+      *fail = 1;
+      return ret;
+    }
   } else {
     double num = ValueConvNumber(obj,fail);
     char buf[256];
     int len;
     if(*fail) {
-      if(Vis_udata(&obj)) {
-        struct ObjUdata* udata = Vget_udata(&obj);
-        Value v;
-        enum MetaStatus r;
-        INVOKE_METAOPS(udata->name.str,
-            rt,
-            udata->mops,
-            to_str,
-            r,
-            RTSparrow(rt),
-            obj,
-            &v);
-        if(r == MOPS_OK) ret = Vget_str(&v);
-        else {
-          if(r == MOPS_PASS) {
-            RuntimeError(rt,PERR_METAOPS_DEFAULT,udata->name.str,
-                METAOPS_NAME(to_str));
-          }
-          *fail = 1;
-          return ret;
-        }
-      } else goto fail;
+      goto fail;
     } else {
       len = NumPrintF(num,buf,256);
       assert(len > 0);
@@ -950,7 +974,7 @@ int ValueToBoolean( struct Runtime* runtime , Value v ) {
     return v.num ? 1 : 0;
   } else if(Vis_udata(&v)) {
     struct ObjUdata* udata = Vget_udata(&v);
-    enum MetaStatus r;
+    int r;
     Value val;
 
     INVOKE_METAOPS(udata->name.str,
@@ -961,11 +985,29 @@ int ValueToBoolean( struct Runtime* runtime , Value v ) {
         RTSparrow(runtime),
         v,
         &val);
-    if(r == MOPS_OK) return Vget_boolean(&val);
+    if(r == 0) return Vget_boolean(&val);
     else return 1; /* Even if we fail at calling to_boolean,
                     * our default strategy is just ignore the
                     * boolean operation and just return 1 for
                     * user data */
+  } else if(Vis_map(&v)) {
+    struct ObjMap* map = Vget_map(&v);
+    if(map->mops) {
+      int r;
+      Value val;
+      INVOKE_METAOPS("map",runtime,
+          map->mops,
+          to_boolean,
+          r,
+          RTSparrow(runtime),
+          v,
+          &val);
+      if(r == 0 && Vis_boolean(&val))
+        return Vget_boolean(&val);
+    } 
+
+    /* fallback */
+    return 1;
   } else {
     return 1;
   }
@@ -976,4 +1018,171 @@ struct ObjStr* ObjStrCat( struct Sparrow* sth ,
     const struct ObjStr* right ) {
   GCTry(sth);
   return ObjStrCatNoGC(sth,left,right);
+}
+
+/* MetaOps wrapper functions ----------------------------- */
+int MetaOps_geti( Value func , struct Sparrow* sparrow ,
+    Value object , enum IntrinsicAttribute iattr , Value* ret ) {
+  Value index;
+  Vset_number(&index,iattr);
+  if(PushArg(sparrow,object)) return -1;
+  if(PushArg(sparrow,index)) return -1;
+  if(CallFunc(sparrow,func,2,ret)) return -1;
+  if(Vis_null(ret)) {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(geti));
+    return -1;
+  }
+  return 0;
+}
+
+int MetaOps_get( Value func , struct Sparrow* sparrow ,
+    Value object , Value key , Value* ret ) {
+  if(PushArg(sparrow,object)) return -1;
+  if(PushArg(sparrow,key)) return -1;
+  if(CallFunc(sparrow,func,2,ret)) return -1;
+  if(Vis_null(ret)) {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(get));
+    return -1;
+  }
+  return 0;
+}
+
+int MetaOps_set( Value func , struct Sparrow* sparrow ,
+    Value object , Value key , Value value ) {
+  Value ret;
+  if(PushArg(sparrow,object)) return -1;
+  if(PushArg(sparrow,key)) return -1;
+  if(PushArg(sparrow,value)) return -1;
+  if(CallFunc(sparrow,func,3,&ret)) return -1;
+  if(Vis_false(&ret)) {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(set));
+    return -1;
+  }
+  return 0;
+}
+
+int MetaOps_seti( Value func , struct Sparrow* sparrow ,
+    Value object , enum IntrinsicAttribute iattr , Value value ) {
+  Value index;
+  Value ret;
+  if(PushArg(sparrow,object)) return -1;
+  Vset_number(&index,iattr);
+  if(PushArg(sparrow,index)) return -1;
+  if(PushArg(sparrow,value)) return -1;
+  if(CallFunc(sparrow,func,3,&ret)) return -1;
+  if(Vis_false(&ret)) {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(seti));
+    return -1;
+  }
+  return 0;
+}
+
+int MetaOps_hash( Value func , struct Sparrow* sparrow ,
+    Value object , int32_t* ret ) {
+  Value r;
+  if(PushArg(sparrow,object)) return -1;
+  if(CallFunc(sparrow,func,1,&r)) return -1;
+  if(Vis_number(&r)) {
+    /* Not really safe here .... */
+    *ret = (int32_t)Vget_number(&r);
+    return 0;
+  } else {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(hash));
+    return -1;
+  }
+  return 0;
+}
+
+int MetaOps_key( Value func , struct Sparrow* sparrow ,
+    Value object ,Value* ret ) {
+  if(PushArg(sparrow,object)) return -1;
+  if(CallFunc(sparrow,func,1,ret)) return -1;
+  if(Vis_null(ret)) {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(key));
+    return -1;
+  }
+  return 0;
+}
+
+int MetaOps_exist( Value func , struct Sparrow* sparrow ,
+    Value object , Value key , int* ret ) {
+  Value r;
+  if(PushArg(sparrow,object)) return -1;
+  if(PushArg(sparrow,key)) return -1;
+  if(CallFunc(sparrow,func,2,&r)) return -1;
+  if(!Vis_boolean(&r)) {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(exist));
+    return -1;
+  }
+  return 0;
+}
+
+int MetaOps_size( Value func , struct Sparrow* sparrow ,
+    Value object , size_t* ret ) {
+  Value r;
+  if(PushArg(sparrow,object)) return -1;
+  if(CallFunc(sparrow,func,1,&r)) return -1;
+  if(!Vis_number(&r) || ToSize(Vget_number(&r),ret) ) {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(exist));
+    return -1;
+  }
+  return 0;
+}
+
+int MetaOps_print( Value func , struct Sparrow* sparrow ,
+    Value object , struct StrBuf* sbuf ) {
+  Value r;
+  if(PushArg(sparrow,object)) return -1;
+  if(CallFunc(sparrow,func,1,&r)) return -1;
+  if(Vis_str(&r)) {
+    struct ObjStr* str = Vget_str(&r);
+    StrBufAppendStrLen( sbuf , str->str , str->len );
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+int MetaOps_to_str( Value func , struct Sparrow* sparrow ,
+    Value object , Value* ret ) {
+  if(PushArg(sparrow,object)) return -1;
+  if(CallFunc(sparrow,func,1,ret)) return -1;
+  if(Vis_str(ret)) return 0;
+  else {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(to_str));
+    return -1;
+  }
+}
+
+int MetaOps_to_boolean( Value func , struct Sparrow* sparrow ,
+    Value object , Value* ret ) {
+  if(PushArg(sparrow,object)) return -1;
+  if(CallFunc(sparrow,func,1,ret)) return -1;
+  if(Vis_boolean(ret)) return 0;
+  else {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(to_boolean));
+    return -1;
+  }
+}
+
+int MetaOps_to_number( Value func , struct Sparrow* sparrow ,
+    Value object , Value* ret ) {
+  if(PushArg(sparrow,object)) return -1;
+  if(CallFunc(sparrow,func,1,ret)) return -1;
+  if(Vis_number(ret)) return 0;
+  else {
+    RuntimeError(sparrow->runtime,PERR_HOOKED_METAOPS_ERROR,
+        ValueGetTypeString(object),METAOPS_NAME(to_number));
+    return -1;
+  }
 }

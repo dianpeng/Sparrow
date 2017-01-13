@@ -99,40 +99,29 @@ typedef union _Value {
 
 typedef void(*CDataDestroyFunction)(void*);
 
-/* Meta method used to extend objects behavior both in scripts and
- * also in host language side */
-
-enum MetaStatus {
-  MOPS_OK,
-  MOPS_PASS,
-  MOPS_FAIL
-};
-
 /* Msic functions */
-typedef enum MetaStatus (*MetaCall) ( struct Sparrow* , Value , Value* );
-typedef enum MetaStatus (*MetaGetI) ( struct Sparrow* , Value ,
+typedef int (*MetaGetI) ( struct Sparrow* , Value ,
     enum IntrinsicAttribute ,Value* );
-typedef enum MetaStatus (*MetaGet ) ( struct Sparrow* , Value , Value , Value* );
-typedef enum MetaStatus (*MetaSet ) ( struct Sparrow* , Value , Value , Value  );
-typedef enum MetaStatus (*MetaSetI) ( struct Sparrow* , Value ,
+typedef int (*MetaGet ) ( struct Sparrow* , Value , Value , Value* );
+typedef int (*MetaSet ) ( struct Sparrow* , Value , Value , Value  );
+typedef int (*MetaSetI) ( struct Sparrow* , Value ,
     enum IntrinsicAttribute ,Value );
-typedef enum MetaStatus (*MetaHash) ( struct Sparrow* , Value , int32_t* );
-typedef enum MetaStatus (*MetaKey ) ( struct Sparrow* , Value , Value* );
-typedef enum MetaStatus (*MetaExist)( struct Sparrow* , Value , Value* );
-typedef enum MetaStatus (*MetaSize) ( struct Sparrow* , Value , size_t*  );
-typedef enum MetaStatus (*MetaIter) ( struct Sparrow* , Value , struct ObjIterator* );
-typedef enum MetaStatus (*MetaPrint)( struct Sparrow* , Value , struct StrBuf* );
+typedef int (*MetaHash) ( struct Sparrow* , Value , int32_t* );
+typedef int (*MetaKey ) ( struct Sparrow* , Value , Value* );
+typedef int (*MetaExist)( struct Sparrow* , Value , int* );
+typedef int (*MetaSize) ( struct Sparrow* , Value , size_t*  );
+typedef int (*MetaIter) ( struct Sparrow* , Value , struct ObjIterator* );
+typedef int (*MetaPrint)( struct Sparrow* , Value , struct StrBuf* );
 
 /* Conversion */
-typedef enum MetaStatus (*MetaToStr)( struct Sparrow* , Value , Value* );
+typedef int (*MetaToStr)( struct Sparrow* , Value , Value* );
 
 /* To boolean SHOULD NOT FAIL, it can only return OK or pass. In current
  * version the FAIL returned by to_boolean will be just ignored */
-typedef enum MetaStatus (*MetaToBoolean)( struct Sparrow* , Value , Value* );
-typedef enum MetaStatus (*MetaToNumber)( struct Sparrow* , Value, Value* );
+typedef int (*MetaToBoolean)( struct Sparrow* , Value , Value* );
+typedef int (*MetaToNumber)( struct Sparrow* , Value, Value* );
 
 #define METAOPS_LIST(__) \
-  __(MetaCall,call,"__call") \
   __(MetaGetI,geti,"__geti") \
   __(MetaGet , get,"__get" ) \
   __(MetaSet , set,"__set" ) \
@@ -174,20 +163,19 @@ METAOPS_LIST(__)
   do { \
     if((OPS)) { \
       if( !Vis_null(&(OPS)->hook_##NAME) ) { \
-        /* TODO:: Add call into the script */ \
-        UNIMPLEMENTED(); \
+        (RET) = MetaOps_##NAME((OPS)->hook_##NAME,SP,OBJ,__VA_ARGS__); \
       } else { \
         if( (OPS)->NAME ) { \
           (RET) = (OPS)->NAME(SP,OBJ,__VA_ARGS__); \
         } else { \
           RuntimeError(RT,PERR_METAOPS_ERROR,TNAME,METAOPS_NAME(NAME)); \
-          (RET) = MOPS_FAIL; \
+          (RET) = -1; \
         } \
       } \
     } else { \
       abort(); \
       RuntimeError(RT,PERR_METAOPS_ERROR,TNAME,METAOPS_NAME(NAME)); \
-      (RET) = MOPS_FAIL; \
+      (RET) = -1; \
     } \
   } while(0)
 
@@ -237,12 +225,14 @@ struct ObjMap {
 
 typedef void (*UdataGCMarkFunction) ( struct ObjUdata* );
 
+typedef int (*UdataCall) ( struct Sparrow* , struct ObjUdata* , Value* );
 struct ObjUdata {
   DEFINE_GCOBJECT; /* GC object */
   struct CStr name; /* Name of the Udata */
   void* udata;
   CDataDestroyFunction destroy;
   UdataGCMarkFunction mark;
+  UdataCall call;
   /* metaops */
   struct MetaOps* mops;
 };
@@ -391,13 +381,15 @@ struct ObjUdata* ObjNewUdataNoGC( struct Sparrow* ,
     const char* name,
     void* ,
     UdataGCMarkFunction mark_func,
-    CDataDestroyFunction destroy_func);
+    CDataDestroyFunction destroy_func,
+    UdataCall call_func);
 
 struct ObjUdata* ObjNewUdata( struct Sparrow* ,
     const char* name,
     void* ,
     UdataGCMarkFunction mark_func,
-    CDataDestroyFunction destroy_func );
+    CDataDestroyFunction destroy_func,
+    UdataCall call_func);
 
 struct ObjProto* ObjNewProtoNoGC( struct Sparrow* , struct ObjModule* );
 struct ObjProto* ObjNewProto( struct Sparrow* , struct ObjModule* );
@@ -784,5 +776,54 @@ static SPARROW_INLINE struct MetaOps* NewMetaOps() {
   return mops;
 }
 
+/* Wrapper function for MetaOps callback. These wrapper functions
+ * are used to invoke script side defined MetaOps callback function. */
+int MetaOps_geti( Value func , struct Sparrow* sparrow ,
+    Value object , enum IntrinsicAttribute iattr , Value* ret );
+
+int  MetaOps_get ( Value func , struct Sparrow* sparrow ,
+    Value object , Value key , Value* ret );
+
+int MetaOps_seti( Value func , struct Sparrow* sparrow ,
+    Value object , enum IntrinsicAttribute iattr , Value value );
+
+int MetaOps_set ( Value func , struct Sparrow* sparrow ,
+    Value object , Value key , Value value );
+
+int MetaOps_hash( Value func , struct Sparrow* sparrow ,
+    Value object , int32_t* ret );
+
+int  MetaOps_key ( Value func , struct Sparrow* sparrow ,
+    Value object , Value* );
+
+int MetaOps_exist( Value func , struct Sparrow* sparrow ,
+    Value object , Value key , int* );
+
+int MetaOps_size ( Value func , struct Sparrow* sparrow ,
+    Value object , size_t* );
+
+/* Currently doesn't support user defined iterator in script side */
+static SPARROW_INLINE
+int MetaOps_iter ( Value func , struct Sparrow* sparrow ,
+    Value object , struct ObjIterator* iterator ) {
+  UNUSE_ARG(func);
+  UNUSE_ARG(sparrow);
+  UNUSE_ARG(object);
+  UNUSE_ARG(iterator);
+  UNIMPLEMENTED();
+  return -1;
+}
+
+int MetaOps_print( Value func , struct Sparrow* sparrow ,
+    Value object , struct StrBuf* );
+
+int MetaOps_to_str( Value func , struct Sparrow* sparrow ,
+    Value object , Value* );
+
+int MetaOps_to_boolean( Value func , struct Sparrow* sparrow ,
+    Value object , Value* );
+
+int MetaOps_to_number( Value func , struct Sparrow* sparrow ,
+    Value object , Value* );
 
 #endif /* OBJECT_H_ */

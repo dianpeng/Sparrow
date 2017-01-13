@@ -59,8 +59,8 @@
 #define PERR_ARGUMENT_OUT_OF_RANGE "argument %s is out of range!"
 #define PERR_SIZE_OVERFLOW "number %0.0f is too large to use as size!"
 #define PERR_CONVERSION_ERROR "type %s doesn't support conversion to %s!"
+#define PERR_HOOKED_METAOPS_ERROR "type %s's user defined meta operation %s failed!"
 #define PERR_METAOPS_ERROR  "type %s doesn't support or not define meta operation %s!"
-#define PERR_METAOPS_DEFAULT "type %s doesn't have default meta operation %s!"
 
 #ifndef SPARROW_DEBUG
 void ReportErrorV( struct StrBuf* , const char* ,

@@ -16,7 +16,7 @@ parser:
 	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/fe/parser_test.c -lm -o parser-test
 
 vm:
-	$(CC) -O3 -Wall -Werror -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/fe/vm_test.c -lm -o vm-test
+	$(CC) -Wall -Werror -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/fe/vm_test.c -lm -o vm-test
 
 test:
 	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) src/fe/vm_test_driver.c -lm -o vm-test-driver

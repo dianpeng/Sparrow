@@ -49,7 +49,7 @@ const char* arg_get_type_name( enum ArgType type ) {
   switch(type) {
   ARGTYPE(__)
   default: return NULL;
-#undef __
+#undef __ /* __ */
   }
 }
 
@@ -485,12 +485,28 @@ Value vm_agets( struct Runtime* rt , Value obj ,
   struct Sparrow* sparrow = RTSparrow(rt);
   Value ret;
   if(Vis_map(&obj)) {
-    if(ObjMapFind(Vget_map(&obj),key,&ret)) {
-      *fail = 1;
-      exec_error(rt,PERR_TYPE_NO_ATTRIBUTE,"map",key->str);
-      return ret;
+    struct ObjMap* map = Vget_map(&obj);
+    if(map->mops) {
+      int r;
+      Value k;
+      Vset_str(&k,key);
+      INVOKE_METAOPS("map",rt,
+          map->mops,
+          get,
+          r,
+          sparrow,
+          obj,
+          k,
+          &ret);
+      *fail = r ? 1 : 0;
+    } else {
+      if(ObjMapFind(Vget_map(&obj),key,&ret)) {
+        *fail = 1;
+        exec_error(rt,PERR_TYPE_NO_ATTRIBUTE,"map",key->str);
+        return ret;
+      }
+      *fail = 0;
     }
-    *fail = 0;
     return ret;
   } else if(Vis_component(&obj)) {
     struct ObjComponent* comp = Vget_component(&obj);
@@ -505,7 +521,7 @@ Value vm_agets( struct Runtime* rt , Value obj ,
     struct ObjUdata* udata = Vget_udata(&obj);
     Value k;
     Vset_str(&k,key);
-    enum MetaStatus r;
+    int r;
     INVOKE_METAOPS(udata->name.str,
         rt,
         (udata->mops),
@@ -515,13 +531,9 @@ Value vm_agets( struct Runtime* rt , Value obj ,
         obj,
         k,
         &ret);
-    if(r == MOPS_OK) {
+    if(r == 0) {
       *fail = 0;
     } else {
-      if(r == MOPS_PASS) {
-        /* We don't have fallback */
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(get));
-      }
       *fail = 1;
     }
     return ret;
@@ -558,11 +570,29 @@ Value vm_agetn( struct Runtime* rt , Value obj,
     }
     *fail = 0;
     return list->arr[index];
+  } else if(Vis_map(&obj)) {
+    struct ObjMap* map = Vget_map(&obj);
+    if(map->mops) {
+      int r;
+      Value idx;
+      Vset_number(&idx,index);
+      INVOKE_METAOPS("map",
+          rt,
+          map->mops,
+          get,
+          r,
+          RTSparrow(rt),
+          obj,
+          idx,
+          &ret);
+      *fail = r ? 1 : 0;
+      return ret;
+    } else goto failed;
   } else if(Vis_udata(&obj)) {
     Value key;
     struct ObjUdata* udata = Vget_udata(&obj);
     Vset_number(&key,index);
-    enum MetaStatus r;
+    int r;
     INVOKE_METAOPS(udata->name.str,
         rt,
         (udata->mops),
@@ -572,16 +602,11 @@ Value vm_agetn( struct Runtime* rt , Value obj,
         obj,
         key,
         &ret);
-    if(r == MOPS_OK) {
-      *fail = 0;
-    } else {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(get));
-      }
-      *fail = 1;
-    }
+    *fail = r ? 1 : 0;
     return ret;
   } else {
+
+failed:
     *fail = 1;
     exec_error(rt,PERR_TYPE_NO_INDEX,ValueGetTypeString(obj),index);
     return ret;
@@ -595,17 +620,32 @@ Value vm_ageti( struct Runtime* rt , Value obj,
   struct Sparrow* sparrow = RTSparrow(rt);
   Value ret;
   if(Vis_map(&obj)) {
-    const char* name = IAttrGetName(iattr);
-    if(ObjMapFindStr(Vget_map(&obj),name,&ret)) {
-      *fail = 1;
-      exec_error(rt,PERR_TYPE_NO_ATTRIBUTE,"map",name);
-      return ret;
+    struct ObjMap* map = Vget_map(&obj);
+    if(map->mops) {
+      int r;
+      INVOKE_METAOPS("map",
+          rt,
+          map->mops,
+          geti,
+          r,
+          sparrow,
+          obj,
+          iattr,
+          &ret);
+      *fail = r ? 1 : 0;
+    } else {
+      const char* name = IAttrGetName(iattr);
+      if(ObjMapFindStr(map,name,&ret)) {
+        *fail = 1;
+        exec_error(rt,PERR_TYPE_NO_ATTRIBUTE,"map",name);
+        return ret;
+      }
+      *fail = 0;
     }
-    *fail = 0;
     return ret;
   } else if(Vis_udata(&obj)) {
     struct ObjUdata* udata = Vget_udata(&obj);
-    enum MetaStatus r;
+    int r;
     INVOKE_METAOPS(udata->name.str,
         rt,
         (udata->mops),
@@ -615,12 +655,9 @@ Value vm_ageti( struct Runtime* rt , Value obj,
         obj,
         iattr,
         &ret);
-    if(r == MOPS_OK) {
+    if(r == 0) {
       *fail = 0;
     } else {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(get));
-      }
       *fail = 1;
     }
     return ret;
@@ -671,22 +708,37 @@ Value vm_aget( struct Runtime* rt, Value object, Value key, int* fail ) {
     *fail = 0;
     return ret;
   } else if(Vis_map(&object)) {
-    if(Vis_str(&key)) {
-      if(ObjMapFind(Vget_map(&object),Vget_str(&key),&ret)) {
+    struct ObjMap* map = Vget_map(&object);
+    if(map->mops) {
+      int r;
+      INVOKE_METAOPS("map",
+          rt,
+          map->mops,
+          get,
+          r,
+          RTSparrow(rt),
+          object,
+          key,
+          &ret);
+      *fail = r ? 1 : 0;
+    } else {
+      if(Vis_str(&key)) {
+        if(ObjMapFind(Vget_map(&object),Vget_str(&key),&ret)) {
+          *fail = 1;
+          exec_error(rt,PERR_TYPE_NO_ATTRIBUTE,"map",Vget_str(&key)->str);
+          return ret;
+        }
+      } else {
         *fail = 1;
-        exec_error(rt,PERR_TYPE_NO_ATTRIBUTE,"map",Vget_str(&key)->str);
+        exec_error(rt,PERR_ATTRIBUTE_TYPE,"map",ValueGetTypeString(key));
         return ret;
       }
-    } else {
-      *fail = 1;
-      exec_error(rt,PERR_ATTRIBUTE_TYPE,"map",ValueGetTypeString(key));
-      return ret;
+      *fail = 0;
     }
-    *fail = 0;
     return ret;
   } else if(Vis_udata(&object)) {
     struct ObjUdata* udata = Vget_udata(&object);
-    enum MetaStatus r;
+    int r;
     INVOKE_METAOPS(udata->name.str,
         rt,
         (udata->mops),
@@ -696,12 +748,9 @@ Value vm_aget( struct Runtime* rt, Value object, Value key, int* fail ) {
         object,
         key,
         &ret);
-    if(r == MOPS_OK) {
+    if(r == 0) {
       *fail = 0;
     } else {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(get));
-      }
       *fail = 1;
     }
     return ret;
@@ -723,12 +772,28 @@ void vm_asetn( struct Runtime* rt,
     struct ObjList* l = Vget_list(&object);
     ObjListAssign(l,index,value);
     *fail = 0;
+  } else if(Vis_map(&object)) {
+    struct ObjMap* map = Vget_map(&object);
+    if(map->mops) {
+      int r;
+      Value idx;
+      Vset_number(&idx,index);
+      INVOKE_METAOPS("map",
+          rt,
+          map->mops,
+          set,
+          r,
+          RTSparrow(rt),
+          object,
+          idx,
+          value);
+      *fail = r ? 1 : 0;
+    } else goto failed;
   } else if(Vis_udata(&object)) {
     struct ObjUdata* udata = Vget_udata(&object);
     struct Sparrow* sparrow = RTSparrow(rt);
     Value key;
-    enum MetaStatus r;
-
+    int r;
     Vset_number(&key,index);
     INVOKE_METAOPS(udata->name.str,
         rt,
@@ -739,15 +804,13 @@ void vm_asetn( struct Runtime* rt,
         object,
         key,
         value);
-    if(r == MOPS_OK) {
+    if(r == 0) {
       *fail = 0;
     } else {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(set));
-      }
       *fail = 1;
     }
   } else {
+failed:
     *fail = 1;
     exec_error(rt,PERR_TYPE_NO_SET_INDEX,ValueGetTypeString(object));
   }
@@ -760,12 +823,30 @@ void vm_asets( struct Runtime* rt,
     Value value,
     int* fail ) {
   if(Vis_map(&object)) {
-    ObjMapPut(Vget_map(&object),key,value);
+    struct ObjMap* map = Vget_map(&object);
+    if(map->mops) {
+      int r;
+      Value k;
+      Vset_str(&k,key);
+      INVOKE_METAOPS("map",
+          rt,
+          map->mops,
+          set,
+          r,
+          RTSparrow(rt),
+          object,
+          k,
+          value);
+      *fail = r ? 1 : 0;
+    } else {
+      ObjMapPut(map,key,value);
+      *fail = 0;
+    }
   } else if(Vis_udata(&object)) {
     struct ObjUdata* udata = Vget_udata(&object);
     struct Sparrow* sparrow = RTSparrow(rt);
     Value k;
-    enum MetaStatus r;
+    int r;
 
     Vset_str(&k,key);
     INVOKE_METAOPS(udata->name.str,
@@ -777,12 +858,9 @@ void vm_asets( struct Runtime* rt,
         object,
         k,
         value);
-    if(r == MOPS_OK) {
+    if(r == 0) {
       *fail = 0;
     } else {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(set));
-      }
       *fail = 1;
     }
   } else {
@@ -791,7 +869,6 @@ void vm_asets( struct Runtime* rt,
     *fail = 1;
     return;
   }
-  *fail =0;
 }
 
 static SPARROW_INLINE
@@ -802,9 +879,24 @@ void vm_aset( struct Runtime* rt,
     int* fail ) {
   *fail = 0;
   if(Vis_map(&object)) {
-    if(Vis_str(&key)) {
-      ObjMapPut(Vget_map(&object),Vget_str(&key),value);
-      return;
+    struct ObjMap* map = Vget_map(&object);
+    if(map->mops) {
+      int r;
+      INVOKE_METAOPS("map",
+          rt,
+          map->mops,
+          set,
+          r,
+          RTSparrow(rt),
+          object,
+          key,
+          value);
+      *fail = r ? 1 : 0;
+    } else {
+      if(Vis_str(&key)) {
+        ObjMapPut(map,Vget_str(&key),value);
+        return;
+      } else *fail =1;
     }
   } else if(Vis_list(&object)) {
     size_t index;
@@ -823,7 +915,7 @@ void vm_aset( struct Runtime* rt,
   } else if(Vis_udata(&object)) {
     struct ObjUdata* udata = Vget_udata(&object);
     struct Sparrow* sparrow = RTSparrow(rt);
-    enum MetaStatus r;
+    int r;
     INVOKE_METAOPS(udata->name.str,
         rt,
         (udata->mops),
@@ -833,10 +925,7 @@ void vm_aset( struct Runtime* rt,
         object,
         key,
         value);
-    if(r != MOPS_OK) {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(set));
-      }
+    if(r != 0) {
       *fail = 1;
     }
   } else {
@@ -851,11 +940,26 @@ void vm_aseti( struct Runtime* rt, Value object , Value value ,
   enum IntrinsicAttribute iattr = (enum IntrinsicAttribute)(index);
   if(Vis_map(&object)) {
     struct ObjMap* m = Vget_map(&object);
-    struct ObjStr* oname = IAttrGetObjStr(RTSparrow(rt),iattr);
-    ObjMapPut(m,oname,value);
+    if(m->mops) {
+      int r;
+      INVOKE_METAOPS("map",
+          rt,
+          m->mops,
+          seti,
+          r,
+          RTSparrow(rt),
+          object,
+          iattr,
+          value);
+      *fail = r ? 1 : 0;
+    } else {
+      struct ObjStr* oname = IAttrGetObjStr(RTSparrow(rt),iattr);
+      ObjMapPut(m,oname,value);
+      *fail = 0;
+    }
   } else if(Vis_udata(&object)) {
     struct ObjUdata* udata = Vget_udata(&object);
-    enum MetaStatus r;
+    int r;
     INVOKE_METAOPS(udata->name.str,
         rt,
         (udata->mops),
@@ -865,12 +969,9 @@ void vm_aseti( struct Runtime* rt, Value object , Value value ,
         object,
         iattr,
         value);
-    if(r == MOPS_OK ) {
+    if(r == 0 ) {
       *fail = 0;
     } else {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(set));
-      }
       *fail = 1;
     }
   } else {
@@ -947,7 +1048,7 @@ static SPARROW_INLINE
 int vm_call( struct Runtime* rt , Value tos , int argnum , Value* ret ) {
   if(Vis_method(&tos)) {
     struct ObjMethod* method = Vget_method(&tos);
-    if(add_callframe(rt,argnum,NULL,tos)) return -1;
+    if(add_callframe(rt,argnum,NULL,tos)) return CALLERROR;
     if(method->method(RTSparrow(rt),method->object,ret)) {
       exec_error(rt,PERR_FUNCCALL_FAILED);
       return CALLERROR;
@@ -956,24 +1057,13 @@ int vm_call( struct Runtime* rt , Value tos , int argnum , Value* ret ) {
     return CFUNC;
   } else if(Vis_udata(&tos)) {
     struct ObjUdata* udata = Vget_udata(&tos);
-    enum MetaStatus r;
-    if(add_callframe(rt,argnum,NULL,tos)) return -1;
-
-    INVOKE_METAOPS(udata->name.str,
-        rt,
-        (udata->mops),
-        call,
-        r,
-        RTSparrow(rt),
-        tos,
-        ret);
-    if(r == MOPS_OK) {
+    int r;
+    if(add_callframe(rt,argnum,NULL,tos)) return CALLERROR;
+    r = udata->call(RTSparrow(rt),udata,ret);
+    if(r == 0) {
       del_callframe(rt);
       return CFUNC;
     } else {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,METAOPS_NAME(call));
-      }
       return CALLERROR;
     }
   } else if(Vis_closure(&tos)) {
@@ -1020,7 +1110,7 @@ Value vm_forprep( struct Runtime* rt , Value tos , int* invalid , int* fail ) {
     return ret;
   } else if(Vis_udata(&tos)) {
     struct ObjUdata* udata = Vget_udata(&tos);
-    enum MetaStatus r;
+    int r;
     struct ObjIterator* itr = ObjNewIterator(RTSparrow(rt));
     INVOKE_METAOPS(udata->name.str,
         rt,
@@ -1030,14 +1120,11 @@ Value vm_forprep( struct Runtime* rt , Value tos , int* invalid , int* fail ) {
         RTSparrow(rt),
         tos,
         itr);
-    if(r == MOPS_OK) {
+    if(r == 0) {
       *fail = 0;
       Vset_iterator(&ret,itr);
       *invalid = itr->has_next(RTSparrow(rt),itr);
     } else {
-      if(r == MOPS_PASS) {
-        exec_error(rt,PERR_METAOPS_DEFAULT,udata->name.str,METAOPS_NAME(iter));
-      }
       *fail = 1;
     }
     return ret;
