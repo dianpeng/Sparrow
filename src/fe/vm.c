@@ -241,6 +241,7 @@ Value vm_addvv( struct Runtime* rt , Value l , Value r , int* fail ) {
   Value vm_##INSTR( struct Runtime* rt , Value l , Value r , int* fail ) { \
     Value ret; \
     double ln, rn; \
+    Vset_null(&ret); \
     ln = ValueConvNumber(l,fail); \
     if(!*fail) { \
       rn = ValueConvNumber(r,fail); \
@@ -285,6 +286,7 @@ static SPARROW_INLINE
 Value vm_modvv( struct Runtime* rt , Value  l , Value r , int* fail ) {
   Value ret;
   double ln,rn;
+  Vset_null(&ret);
   ln = ValueConvNumber(l,fail);
   if(!*fail) {
     rn = ValueConvNumber(r,fail);
@@ -327,6 +329,7 @@ static SPARROW_INLINE
 Value vm_powvv( struct Runtime* rt , Value l , Value r , int* fail ) {
   Value ret;
   double ln,rn;
+  Vset_null(&ret);
   ln = ValueConvNumber(l,fail);
   if(!*fail) {
     rn = ValueConvNumber(r,fail);
@@ -366,6 +369,7 @@ Value vm_test( struct Runtime* rt, Value tos ) {
     Value ret; \
     UNUSE_ARG(rt); \
     double ln,rn; \
+    Vset_null(&ret); \
     ln = ValueConvNumber(l,fail); \
     if(!*fail) { \
       rn = ValueConvNumber(r,fail); \
@@ -456,6 +460,7 @@ Value vm_newmap( struct Runtime* rt , int narg , int* fail ) {
   struct CallThread* thread = RTCallThread(rt);
   int i;
   Value ret;
+  Vset_null(&ret);
   m = ObjNewMap(thread->sparrow,NextPowerOf2Size(narg));
   for( i = 2 *(narg-1) ; i>=0 ; i -= 2 ) {
     Value key = top(thread,i+1);
@@ -987,6 +992,7 @@ static SPARROW_INLINE
 Value vm_forprep( struct Runtime* rt , Value tos , int* invalid , int* fail ) {
   struct ObjIterator* itr;
   Value ret;
+  Vset_null(&ret);
   *fail = 0;
   if(Vis_str(&tos)) {
     itr = ObjNewIterator(RTSparrow(rt));
@@ -1091,6 +1097,9 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
   struct CallFrame* frame = current_frame(thread);
   struct ObjClosure* closure = frame->closure;
   struct ObjProto* proto = closure->proto;
+
+  /* sink static analyzer's stupid error */
+  Vset_null(ret);
 
 #ifndef SPARROW_VM_NO_THREADING
   /* when we reach here, it means we will do a threading
@@ -2444,7 +2453,7 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
 
   /* iterator */
   CASE(BC_FORPREP) {
-    int invalid;
+    int invalid = 0;
     tos = top(thread,0);
     res = vm_forprep(rt,tos,&invalid,check);
     replace(thread,res); /* always push iterator to stack */
