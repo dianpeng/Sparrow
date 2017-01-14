@@ -1004,7 +1004,7 @@ int ValueToBoolean( struct Runtime* runtime , Value v ) {
           &val);
       if(r == 0 && Vis_boolean(&val))
         return Vget_boolean(&val);
-    } 
+    }
 
     /* fallback */
     return 1;

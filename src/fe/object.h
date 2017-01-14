@@ -179,6 +179,9 @@ METAOPS_LIST(__)
     } \
   } while(0)
 
+/* The following objects are all GC managed objects and they forms
+ * the core part of how our small language runs */
+
 struct ObjStr {
   DEFINE_GCOBJECT; /* GC reference */
   const char* str; /* It just means a byte array now */
