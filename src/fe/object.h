@@ -89,11 +89,7 @@ enum {
 
 typedef union _Value {
   double num;
-#ifdef ARCH_64
   uint64_t ipart;
-#else
-  uint32_t ipart;
-#endif /* ARCH_64 */
   intptr_t ptr;
 } Value;
 

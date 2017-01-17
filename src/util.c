@@ -72,7 +72,7 @@ struct CStr StrBufToCStr( struct StrBuf* sbuf ) {
 void MemGrow( void** buf , size_t* ocap , size_t objsz ) {
   if(ocap == NULL || *ocap == 0 || *buf == NULL) {
     *buf = malloc(MEMORY_INITIAL_OBJ_SIZE*objsz);
-    *ocap = MEMORY_INITIAL_OBJ_SIZE;
+    if(ocap) *ocap = MEMORY_INITIAL_OBJ_SIZE;
   } else {
     size_t nsize = *ocap * 2;
     if(nsize > MEMORY_MAX_OBJ_SIZE) {

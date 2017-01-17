@@ -4,13 +4,6 @@
 #include <assert.h>
 #include <limits.h>
 
-/* We only worked on a 64 bits machine */
-#ifdef __x86_64__
-#define ARCH_64
-#else
-#define ARCH_32
-#endif /* __x86_64__ */
-
 #if defined(__GNUC__) || defined(__clang__)
 /* Likely unlikely stuff for static branch predication.
  * Right now it is nearly useless for most of the new

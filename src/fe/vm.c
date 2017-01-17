@@ -1007,7 +1007,7 @@ int add_callframe( struct Runtime* rt ,int argnum ,
       return -1;
     } else {
       size_t ncap = thread->frame_cap*2;
-      thread->frame = realloc(thread->frame,ncap*sizeof(struct CallThread));
+      thread->frame = realloc(thread->frame,ncap*sizeof(struct CallFrame));
       thread->frame_cap = ncap;
     }
   }

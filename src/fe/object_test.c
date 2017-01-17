@@ -187,7 +187,6 @@ static void test_const_table() {
       size_t i = 0 ;
       while(start) {
         ++i;
-        assert(start->gtype == VALUE_STRING);
         start = start->next;
       }
       assert( i == 100 + gc_sz );
