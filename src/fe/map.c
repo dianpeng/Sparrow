@@ -1,24 +1,17 @@
 #include "map.h"
 #include <stdlib.h>
 
-static void insert( struct ObjMap* map ,
-    struct ObjStr* key , uint32_t fhash, Value val );
-
-static uint32_t key_hash( const char* str, size_t len ) {
-  if(len <LARGE_STRING_SIZE)
-    return StringHash(str,len);
-  else
-    return LargeStringHash(str,len);
-}
+static void insert( struct ObjMap* map , struct ObjStr* key , Value val );
 
 enum {
   DO_FIND,
   DO_INSERT
 };
 
-static struct ObjMapEntry* find_entry( struct ObjMap* map , const char* key ,
-    uint32_t fhash , int opt ) {
+static struct ObjMapEntry* find_entry( struct ObjMap* map , 
+    const struct ObjStr* key , int opt ) {
   /* Try to find the main position */
+  int fhash = key->hash;
   int idx = fhash & (map->cap-1);
   struct ObjMapEntry* entry = map->entry + idx;
   struct ObjMapEntry* prev;
@@ -41,7 +34,7 @@ static struct ObjMapEntry* find_entry( struct ObjMap* map , const char* key ,
     if(entry->del) {
       if( opt == DO_INSERT )
         return entry;
-    } else if(entry->fhash == fhash && strcmp(entry->key->str,key) == 0) {
+    } else if(ObjStrEqual(entry->key,key)) {
       assert(entry->used);
       return entry;
     }
@@ -75,7 +68,7 @@ static void rehash( struct ObjMap* map ) {
   for( i = 0 ; i < map->cap ; ++i ) {
     struct ObjMapEntry* ent = map->entry+i;
     if(ent->used && !ent->del) {
-      insert(&temp_map,ent->key,ent->fhash,ent->value);
+      insert(&temp_map,ent->key,ent->value);
     }
   }
   free(map->entry); /* free the existed entry */
@@ -85,17 +78,16 @@ static void rehash( struct ObjMap* map ) {
   map->cap = temp_map.cap;
 }
 
-static void insert( struct ObjMap* map , struct ObjStr* key , uint32_t fhash,
-  Value val ) {
+static void insert( struct ObjMap* map , struct ObjStr* key , Value val ) {
   struct ObjMapEntry* entry;
   if(map->scnt == map->cap)
     rehash(map);
+
   entry = find_entry(
       map,
-      key->str,
-      fhash,
-      DO_INSERT
-      );
+      key,
+      DO_INSERT);
+
   assert(entry);
   entry->key = key;
   entry->value = val;
@@ -122,15 +114,14 @@ void ObjMapDestroy( struct ObjMap* map ) {
 
 void ObjMapPut( struct ObjMap* map , struct ObjStr* key ,
   Value val ) {
-  insert(map,key,key->hash,val);
+  insert(map,key,val);
 }
 
 int ObjMapFind( struct ObjMap* map , const struct ObjStr* key ,
     Value* val ) {
   struct ObjMapEntry* entry = find_entry(
       map,
-      key->str,
-      key->hash,
+      key,
       DO_FIND);
   if(entry) {
     if(val) *val = entry->value;
@@ -140,12 +131,12 @@ int ObjMapFind( struct ObjMap* map , const struct ObjStr* key ,
   }
 }
 
-int ObjMapFindStr( struct ObjMap* map , const char* key ,
-    Value* val ) {
+int ObjMapFindStr( struct Sparrow* sparrow , struct ObjMap* map ,
+    const char* key , Value* val ) {
+  struct ObjStr* k = ObjNewStr(sparrow,key,strlen(key));
   struct ObjMapEntry* entry = find_entry(
       map,
-      key,
-      key_hash(key,strlen(key)),
+      k,
       DO_FIND);
   if(entry) {
     if(val) *val = entry->value;
@@ -159,8 +150,7 @@ int ObjMapRemove( struct ObjMap* map , const struct ObjStr* key ,
     Value* val ) {
   struct ObjMapEntry* entry = find_entry(
       map,
-      key->str,
-      key->hash,
+      key,
       DO_FIND);
   if(entry) {
     entry->del = 1;

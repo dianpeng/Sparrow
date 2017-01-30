@@ -1,6 +1,8 @@
 #include "map.h"
 #include <stdlib.h>
 
+/* THIS TEST FILE IS TOTALLY DEPERACTED, WE NEED A *REWRITE* */
+
 static uint32_t key_hash( const char* str, size_t len ) {
   if(len <LARGE_STRING_SIZE)
     return StringHash(str,len);

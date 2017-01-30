@@ -823,20 +823,20 @@ static int gc_config( struct Sparrow* sparrow , Value obj , Value* ret ) {
   arg = RuntimeGetArg(runtime,0);
   m = Vget_map(&arg);
 
-  if(ObjMapFindStr(m,"ratio",&v_ratio)==0) {
+  if(ObjMapFindStr(sparrow,m,"ratio",&v_ratio)==0) {
     if(Vis_number(&v_ratio)) {
       ratio = (float)Vget_number(&v_ratio);
     }
   }
 
-  if(ObjMapFindStr(m,"threshold",&v_threshold)==0) {
+  if(ObjMapFindStr(sparrow,m,"threshold",&v_threshold)==0) {
     if(Vis_number(&v_threshold)) {
       double n = Vget_number(&v_threshold);
       if(n>0 && n < SPARROW_SIZE_MAX) threshold = (size_t)n;
     }
   }
 
-  if(ObjMapFindStr(m,"penalty_ratio",&v_penalty_ratio)==0) {
+  if(ObjMapFindStr(sparrow,m,"penalty_ratio",&v_penalty_ratio)==0) {
     if(Vis_number(&v_penalty_ratio)) {
       penalty_ratio = (float)Vget_number(&v_penalty_ratio);
     }

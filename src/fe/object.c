@@ -24,7 +24,6 @@ static void objstr_insert( struct Sparrow* ,
 uint32_t StringHash( const char* str , size_t len ) {
   uint32_t ret = 17771;
   size_t i;
-  assert(len<LARGE_STRING_SIZE);
   for( i = 0 ; i < len ; ++i ) {
     ret = (ret ^((ret << 5) + (ret >> 2))) + (uint32_t)(str[i]);
   }
@@ -625,7 +624,7 @@ void SparrowInit( struct Sparrow* sth ) {
   /* Initialize global builtin function name lists */
 #define __(A,B,C) \
   do { \
-    ObjInitTempStrLen(&sth->BuiltinFuncName_##B,C,STRING_SIZE(C)); \
+    sth->BuiltinFuncName_##B = ObjNewStr(sth,C,STRING_SIZE(C)); \
   } while(0);
 
   INTRINSIC_FUNCTION(__)
@@ -635,12 +634,13 @@ void SparrowInit( struct Sparrow* sth ) {
   /* Initialize intrinsic attribute name lists */
 #define __(A,B) \
     do { \
-      ObjInitTempStrLen(&sth->IAttrName_##A,B,STRING_SIZE(B)); \
+      sth->IAttrName_##A = ObjNewStr(sth,B,STRING_SIZE(B)); \
     } while(0);
 
   INTRINSIC_ATTRIBUTE(__)
 
 #undef __ /* __ */
+
   global_env_init(sth,&(sth->global_env)); /* initialize global environment */
 }
 
@@ -649,7 +649,7 @@ struct ObjStr* IAttrGetObjStr( struct Sparrow* sparrow,
 
   switch(iattr) {
 
-#define __(A,B) case IATTR_##A: return &(sparrow->IAttrName_##A);
+#define __(A,B) case IATTR_##A: return (sparrow->IAttrName_##A);
 
     INTRINSIC_ATTRIBUTE(__)
 
@@ -740,55 +740,38 @@ struct ObjStr* ObjNewStrNoGC( struct Sparrow* sth ,
     const char* str , size_t len ) {
   uint32_t hash;
   struct ObjStr* hint = NULL;
-  if(len < LARGE_STRING_SIZE) {
-    int idx;
-    struct ObjStr* slot;
-    hash = StringHash(str,len);
-    idx = hash & ( sth->str_cap -1 );
-    slot = sth->str_arr[idx];
-    while(slot && !string_equal(slot,hash,str,len)) {
-      if(slot->more) slot = sth->str_arr[slot->next];
-      else {
-        hint = slot;
-        slot = NULL;
-        break;
-      }
-    }
-    if(slot) return slot;
+  int idx;
+  struct ObjStr* slot;
+  hash = HashString(str,len);
+  idx = hash & ( sth->str_cap -1 );
+  slot = sth->str_arr[idx];
+  while(slot && !string_equal(slot,hash,str,len)) {
+    if(slot->more) slot = sth->str_arr[slot->next];
     else {
-      struct ObjStr* new_str = malloc(sizeof(*new_str)+len+1);
-      new_str->str = ((char*)new_str+sizeof(*new_str));
-      new_str->len = len;
-      new_str->hash = hash;
-      new_str->more = 0;
-      new_str->next = 0;
-
-      /* do not treat str as a C string */
-      memcpy((void*)new_str->str,str,len);
-
-      /* buf we still append a null terminator for internal
-       * print or error handling stuff */
-      ((char*)new_str->str)[len] = 0;
-
-      objstr_insert(sth,new_str,hint);
-      add_gcobject(sth,new_str,VALUE_STRING);
-      return new_str;
+      hint = slot;
+      slot = NULL;
+      break;
     }
-  } else {
-    struct ObjStr* lstr;
-    hash = LargeStringHash(str,len);
-    lstr = malloc( sizeof(*lstr) + len + 1 );
-    lstr->str = ((char*)lstr + sizeof(*lstr));
-    lstr->len = len;
-    lstr->hash = hash;
-    lstr->next = 0;
-    lstr->more = 0;
-    /* do not treat str as a C string */
-    memcpy((void*)lstr->str,str,len);
-    ((char*)lstr->str)[len] = 0;
+  }
+  if(slot) return slot;
+  else {
+    struct ObjStr* new_str = malloc(sizeof(*new_str)+len+1);
+    new_str->str = ((char*)new_str+sizeof(*new_str));
+    new_str->len = len;
+    new_str->hash = hash;
+    new_str->more = 0;
+    new_str->next = 0;
 
-    add_gcobject(sth,lstr,VALUE_STRING);
-    return lstr;
+    /* do not treat str as a C string */
+    memcpy((void*)new_str->str,str,len);
+
+    /* buf we still append a null terminator for internal
+     * print or error handling stuff */
+    ((char*)new_str->str)[len] = 0;
+
+    objstr_insert(sth,new_str,hint);
+    add_gcobject(sth,new_str,VALUE_STRING);
+    return new_str;
   }
 }
 
@@ -814,8 +797,9 @@ struct ObjStr* ObjNewStrFromChar( struct Sparrow* sth,
 static int
 str_iter_has_next( struct Sparrow* sth ,
     struct ObjIterator* itr ) {
+  UNUSE_ARG(sth);
   struct ObjStr* str = Vget_str(&(itr->obj));
-  if( itr->u.index >= str->len )
+  if( (size_t)itr->u.index >= str->len )
     return -1;
   else
     return 0;
@@ -833,8 +817,8 @@ str_iter_deref( struct Sparrow* sth ,
 }
 
 static void
-str_iter_move( struct Sparrow* sth ,
-    struct ObjIterator* itr ) {
+str_iter_move( struct Sparrow* sth , struct ObjIterator* itr ) {
+  UNUSE_ARG(sth);
   ++itr->u.index;
 }
 

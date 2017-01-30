@@ -19,7 +19,7 @@ void ObjMapInit( struct ObjMap* map , size_t capacity ) {
 
 void ObjMapPut( struct ObjMap* , struct ObjStr* key , Value val );
 int ObjMapFind( struct ObjMap* , const struct ObjStr*,Value* );
-int ObjMapFindStr( struct ObjMap* , const char* , Value* );
+int ObjMapFindStr( struct Sparrow* , struct ObjMap* , const char* , Value* );
 int ObjMapRemove( struct ObjMap*, const struct ObjStr* ,Value* );
 void ObjMapClear( struct ObjMap* );
 void ObjMapDestroy( struct ObjMap* );

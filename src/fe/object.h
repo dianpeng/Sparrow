@@ -34,9 +34,11 @@ enum {
 #endif
 
 uint32_t StringHash( const char* , size_t len );
+
 uint32_t LargeStringHash( const char* , size_t len );
 
-static uint32_t HashString( const char* str , size_t len ) {
+static SPARROW_INLINE
+uint32_t HashString( const char* str , size_t len ) {
   if(len < LARGE_STRING_SIZE)
     return StringHash(str,len);
   else
@@ -354,22 +356,6 @@ struct ObjStr* ObjNewStr( struct Sparrow* , const char* , size_t len );
 struct ObjStr* ObjNewStrFromChar( struct Sparrow* , char  );
 struct ObjStr* ObjNewStrFromCharNoGC( struct Sparrow* , char  );
 
-static SPARROW_INLINE
-void ObjInitTempStrLen( struct ObjStr* str , const char* s , size_t len ) {
-  str->gc.gc_state = GC_MARKED;
-  str->gc.gtype = VALUE_STRING;
-  str->len = len;
-  str->str = s;
-  str->hash = HashString(s,len);
-  str->more = 0;
-  str->next = 0;
-}
-
-static SPARROW_INLINE
-void ObjInitTempStr( struct ObjStr* str , const char* s ) {
-  ObjInitTempStrLen(str,s,strlen(s));
-}
-
 struct ObjList* ObjNewListNoGC( struct Sparrow* , size_t cap );
 struct ObjList* ObjNewList( struct Sparrow* , size_t cap );
 
@@ -494,19 +480,19 @@ struct Sparrow {
   /* All the intrinsic function(builtin)'s name in static ObjStr
    * structure. They don't participate in GC at all. A little bit
    * optimization from traditionall large root sets */
-#define __(A,B,C) struct ObjStr BuiltinFuncName_##B;
+#define __(A,B,C) struct ObjStr* BuiltinFuncName_##B;
   INTRINSIC_FUNCTION(__)
 #undef __ /* __ */
 
   /* All the intrinsic attribute's name in static ObjStr
    * structure. They don't participate in GC at all. */
-#define __(A,C) struct ObjStr IAttrName_##A;
+#define __(A,C) struct ObjStr* IAttrName_##A;
   INTRINSIC_ATTRIBUTE(__)
 #undef __ /* __ */
 };
 
-#define IFUNC_NAME(SP,NAME) (&((SP)->BuiltinFuncName_##NAME))
-#define IATTR_NAME(SP,NAME) (&(SP)->IAttrName_##NAME)
+#define IFUNC_NAME(SP,NAME) (((SP)->BuiltinFuncName_##NAME))
+#define IATTR_NAME(SP,NAME) ((SP)->IAttrName_##NAME)
 
 /* Function for configuring GC trigger formula */
 static SPARROW_INLINE
@@ -664,20 +650,16 @@ _DEFINE(ObjLoopIterator,loop_iterator,VALUE_LOOP_ITERATOR)
 #undef _DEFINE
 
 /* String APIs */
-
-#define ObjStrEqual(L,R) \
-  (((L) == (R)) || \
-   ((L)->hash == (R)->hash && \
-   (L)->len == (R)->len && \
-   (memcmp((L)->str,(R)->str,(L)->len) == 0)))
-
-/* TODO::
- * Some micro optimization for string comparison ???
- */
+static SPARROW_INLINE
+int ObjStrEqual( const struct ObjStr* left , const struct ObjStr* right ) {
+  return (left == right ||
+         (left->hash == right->hash &&
+          left->len == right->len &&
+          memcmp(left->str,right->str,left->len) == 0));
+}
 
 static SPARROW_INLINE
-int ObjStrCmp( const struct ObjStr* left ,
-    const struct ObjStr* right ) {
+int ObjStrCmp( const struct ObjStr* left , const struct ObjStr* right ) {
   if( left == right )
     return 0;
   else {

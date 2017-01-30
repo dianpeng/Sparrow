@@ -634,8 +634,8 @@ Value vm_ageti( struct Runtime* rt , Value obj,
           &ret);
       *fail = r ? 1 : 0;
     } else {
-      const char* name = IAttrGetName(iattr);
-      if(ObjMapFindStr(map,name,&ret)) {
+      const struct ObjStr* name = IAttrGetObjStr(sparrow,iattr);
+      if(ObjMapFind(map,name,&ret)) {
         *fail = 1;
         exec_error(rt,PERR_TYPE_NO_ATTRIBUTE,"map",name);
         return ret;
@@ -2010,7 +2010,7 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
     lstr = proto->str_arr[opr];
     r = top(thread,0);
     if(Vis_str(&r)) {
-      Vset_boolean(&res,ObjStrCmp(lstr,Vget_str(&r))==0);
+      Vset_boolean(&res,ObjStrEqual(lstr,Vget_str(&r)));
       replace(thread,res);
     } else {
       FATAL(rt,PERR_TYPE_MISMATCH,"right","string",ValueGetTypeString(r));
@@ -2024,7 +2024,7 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
     rstr = proto->str_arr[opr];
     l = top(thread,0);
     if(Vis_str(&l)) {
-      Vset_boolean(&res,ObjStrCmp(Vget_str(&l),rstr) ==0);
+      Vset_boolean(&res,ObjStrEqual(Vget_str(&l),rstr));
       replace(thread,res);
     } else {
       FATAL(rt,PERR_TYPE_MISMATCH,"left","string",ValueGetTypeString(l));

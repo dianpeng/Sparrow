@@ -765,10 +765,10 @@ tryfold_arithcomp( struct Parser* p ,
             l->tag = ((ObjStrCmp(l->str,r->str)>=0)? ETRUE:EFALSE);
             break;
           case TK_EQ:
-            l->tag = ((ObjStrCmp(l->str,r->str)==0)? ETRUE:EFALSE);
+            l->tag = ((ObjStrEqual(l->str,r->str))? ETRUE:EFALSE);
             break;
           case TK_NE:
-            l->tag = ((ObjStrCmp(l->str,r->str)==0) ? ETRUE:EFALSE);
+            l->tag = ((ObjStrEqual(l->str,r->str))? ETRUE:EFALSE);
             break;
           default:
             assert(!"unreachable!"); break;
