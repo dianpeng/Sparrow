@@ -21,6 +21,9 @@ vm:
 test:
 	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) src/fe/vm_test_driver.c -lm -o vm-test-driver
 
+show_bc:
+	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) tools/show_bc.c -lm -o show_bc
+
 .PHONY:clean_coverage
 
 clean_coverage:

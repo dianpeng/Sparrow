@@ -15,7 +15,6 @@ void ObjListInit( struct Sparrow* sparrow , struct ObjList* list ,
   }
 }
 
-
 static SPARROW_INLINE void
 ObjListDestroy( struct ObjList* list ) {
   free(list->arr);

@@ -119,6 +119,22 @@ char LexerGetStringEscapeChar( int c ) {
   }
 }
 
+static SPARROW_INLINE
+char LexerGetStringUnescapeChar( int c ) {
+  switch(c) {
+    case '\t': return 't';
+    case '\v': return 'v';
+    case '\b': return 'b';
+    case '\n': return 'n';
+    case '\\': return '\\';
+    case '"': return '"';
+    default: return 0;
+  }
+}
+
+void LexerUnescapeStringLiteral( struct StrBuf* sbuf , const char* str ,
+    size_t length );
+
 #define LexerLexeme(LEX) (&((LEX)->lexeme))
 #define LexerLexemeStr(LEX) (&((LEX)->lexeme.str))
 #define LexerLexemeNum(LEX) ((LEX)->lexeme.num)

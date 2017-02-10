@@ -5,6 +5,7 @@
 #include "gc.h"
 #include "error.h"
 #include "builtin.h"
+#include "lexer.h"
 #include "../util.h"
 
 #define __(A,B,C) const char* MetaOpsName_##B = (C);
@@ -248,41 +249,52 @@ static const char* upvalue_index_str( int type ) {
     return "embed";
 }
 
-
 void ObjDumpModule( struct ObjModule* mod ,
     FILE* file , const char* prefix ) {
   size_t i;
-  if(prefix)
-    fprintf(file,"Path:%s and source:%s|%s!\n",
-        mod->source_path.str,mod->source.str,prefix);
-  else
-    fprintf(file,"Source path:%s!\n",mod->source_path.str);
-  fprintf(file,"Proto list:%zu!\n",mod->cls_size);
+  struct StrBuf sbuf;
+  StrBufInit(&sbuf,128);
+  if(prefix) {
+    fprintf(file,"%s@%s\n=====================================\n",prefix,
+        mod->source_path.str);
+    fprintf(file,"%s\n\n",mod->source.str);
+    fprintf(file,"=======================================\n");
+  } else {
+    fprintf(file,"Source path:%s\n\n",mod->source_path.str);
+  }
+  fprintf(file,"Proto list:%zu\n",mod->cls_size);
   for( i = 0 ; i < mod->cls_size ; ++i ) {
     struct ObjProto* cls = mod->cls_arr[i];
     size_t j;
     fprintf(file,"%zu. Proto prototype:%s\n",i+1,cls->proto.str);
 
-    fprintf(file,"Proto number table:\n");
+    fprintf(file,"\nProto number table:\n");
     for( j = 0 ; j < cls->num_size ; ++j ) {
       fprintf(file,"%zu. %f\n",j+1,cls->num_arr[j]);
     }
 
-    fprintf(file,"Proto string table:\n");
+    fprintf(file,"\nProto string table:\n");
     for( j = 0 ; j < cls->str_size ; ++j ) {
-      fprintf(file,"%zu. %s\n",j+1,cls->str_arr[j]->str);
+      LexerUnescapeStringLiteral(&sbuf,cls->str_arr[j]->str,
+                                       cls->str_arr[j]->len);
+      fprintf(file,"%zu. ",j+1);
+      /* To avoid another StrBuf to CStr conversion , just directly
+       * use fwrite to write the byte array out */
+      fwrite(sbuf.buf,1,sbuf.size,file);
+      /* Write out a linebreak */
+      fwrite("\n",1,1,file);
     }
 
-    fprintf(file,"Proto upvalue table:\n");
+    fprintf(file,"\nProto upvalue table:\n\n");
     for( j = 0 ; j < cls->uv_size ; ++j ) {
       fprintf(file,"%zu. %d(%s)\n",j+1,
           cls->uv_arr[j].idx,
           upvalue_index_str(cls->uv_arr[j].state));
     }
-
     CodeBufferDump(&(cls->code_buf),file,NULL);
-    printf("\n");
+    fprintf(file,"=======================================\n\n");
   }
+  StrBufDestroy(&sbuf);
 }
 
 struct ObjComponent* ObjNewComponentNoGC( struct Sparrow* sth,

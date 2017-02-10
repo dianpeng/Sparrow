@@ -315,3 +315,19 @@ struct Lexeme* LexerNext( struct Lexer* lex ) {
   } while(1);
   assert(0); return NULL;
 }
+
+void LexerUnescapeStringLiteral( struct StrBuf* sbuf , const char* str ,
+    size_t length ) {
+  size_t i;
+  StrBufClear(sbuf);
+  for( i = 0 ; i < length ; ++i ) {
+    char c = str[i];
+    char ec = LexerGetStringUnescapeChar(c);
+    if(ec) {
+      StrBufPush(sbuf,'\\');
+      StrBufPush(sbuf,ec);
+    } else {
+      StrBufPush(sbuf,c);
+    }
+  }
+}

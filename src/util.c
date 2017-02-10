@@ -68,7 +68,6 @@ struct CStr StrBufToCStr( struct StrBuf* sbuf ) {
   }
 }
 
-
 void MemGrow( void** buf , size_t* ocap , size_t objsz ) {
   if(ocap == NULL || *ocap == 0 || *buf == NULL) {
     *buf = malloc(MEMORY_INITIAL_OBJ_SIZE*objsz);
@@ -100,4 +99,72 @@ char* ReadFile( const char* fpath , size_t* size ) {
   if(size) *size = sz;
   fclose(f);
   return ret;
+}
+
+/* Arena allocator implementation ========================== */
+struct aa_chunk {
+  struct aa_chunk* next;
+};
+
+void ArenaAllocatorInit( struct ArenaAllocator* aa ,
+    size_t initial_size ,
+    size_t maximum_size ) {
+  /* TODO:: Round initial_size to avoid internal fragmentation comes
+   * from underlying allocator ??? */
+  struct aa_chunk* ck;
+  assert(initial_size <= maximum_size);
+
+  ck = malloc(sizeof(*ck) + initial_size);
+  ck->next = NULL;
+
+  aa->cur_sz  = initial_size;
+  aa->pool_sz = initial_size;
+  aa->max_sz  = maximum_size;
+  aa->cur_ptr = (char*)(ck) + sizeof(*ck);
+  aa->ck_list = ck;
+}
+
+static void aa_grow( struct ArenaAllocator* aa , size_t guarantee ) {
+  size_t ncap = aa->pool_sz * 2;
+  struct aa_chunk* ck;
+  if(ncap < guarantee) {
+    ncap = guarantee;
+  } else {
+    if(ncap >= aa->max_sz) ncap = aa->max_sz;
+    /* Gurantee is *guranteed* to be smaller than maximum size */
+  }
+  ck = malloc(sizeof(*ck) + ncap);
+  ck->next = aa->ck_list;
+  aa->ck_list = ck;
+  aa->cur_ptr = (char*)(ck) + sizeof(*ck);
+  aa->cur_sz  = ncap;
+  aa->pool_sz = ncap;
+}
+
+void* ArenaAllocatorAlloc( struct ArenaAllocator* aa , size_t sz ) {
+  void* ret;
+  assert(sz <= aa->max_sz);
+  if(sz > aa->cur_sz) {
+    aa_grow(aa,sz);
+  }
+  /* At least you have one guranteed size to allocate */
+  assert( sz <= aa->cur_sz );
+  ret = aa->cur_ptr;
+  aa->cur_ptr = (char*)(ret) + sz;
+  aa->cur_sz -= sz;
+  return ret;
+}
+
+void ArenaAllocatorDestroy( struct ArenaAllocator* aa ) {
+  struct aa_chunk* list = (struct aa_chunk*)(aa->ck_list);
+  while(list) {
+    struct aa_chunk* n = list->next;
+    free(list);
+    list = n;
+  }
+  aa->ck_list = NULL;
+  aa->cur_ptr= NULL;
+  aa->cur_sz = 0;
+  aa->max_sz = 0;
+  aa->pool_sz =0;
 }

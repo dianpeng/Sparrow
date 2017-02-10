@@ -424,7 +424,6 @@ void ObjDestroyModule( struct ObjModule* mod ) {
 /* Debug purpose */
 void ObjDumpModule( struct ObjModule* , FILE* , const char* );
 
-
 /* Used in parser */
 int ConstAddNumber( struct ObjProto* oc , double num );
 int ConstAddString( struct ObjProto* oc , struct ObjStr* );
