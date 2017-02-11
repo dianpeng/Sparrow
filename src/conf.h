@@ -46,14 +46,18 @@
 /* Data type size boundary limitation define */
 #ifndef SPARROW_SIZE_MAX
 #define SPARROW_SIZE_MAX UINT_MAX
-#endif // SPARROW_SIZE_MAX
+#endif /* SPARROW_SIZE_MAX */
 
 #ifndef SPARROW_INT_MAX_
 #define SPARROW_INT_MAX INT_MAX
-#endif // SPARROW_INT_MAX
+#endif /* SPARROW_INT_MAX */
 
 #ifndef SPARROW_INT_MIN
 #define SPARROW_INT_MIN INT_MIN
-#endif // SPARROW_INT_MIN
+#endif /* SPARROW_INT_MIN */
+
+/* Static assertion directives */
+#define SPARROW_STATIC_ASSERT(COND,MSG) \
+  typedef char static_assert_##MSG[(COND)?1:-1]
 
 #endif /* CONF_H_ */

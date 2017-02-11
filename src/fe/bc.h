@@ -36,8 +36,7 @@
 /* Varg local variable name */
 extern struct CStr VARG;
 
-/* Order matters, the intrinsic function call bytecode
- * must be at *very* first */
+/* Order matters, don't adjust order !! */
 #define BYTECODE(__) \
   /* Intrinsic functions , must be at very first to start \
    * index at 0 */ \
@@ -105,17 +104,17 @@ extern struct CStr VARG;
   __(BC_MOVETRUE,"movetrue",1) \
   __(BC_MOVEFALSE,"movefalse",1) \
   __(BC_MOVENULL,"movenull",1) \
+  __(BC_MOVENN5,"movenn5",1) \
+  __(BC_MOVENN4,"movenn4",1) \
+  __(BC_MOVENN3,"movenn3",1) \
+  __(BC_MOVENN2,"movenn2",1) \
+  __(BC_MOVENN1,"movenn1",1) \
   __(BC_MOVEN0,"moven0",1) \
   __(BC_MOVEN1,"moven1",1) \
   __(BC_MOVEN2,"moven2",1) \
   __(BC_MOVEN3,"moven3",1) \
   __(BC_MOVEN4,"moven4",1) \
   __(BC_MOVEN5,"moven5",1) \
-  __(BC_MOVENN1,"movenn1",1) \
-  __(BC_MOVENN2,"movenn2",1) \
-  __(BC_MOVENN3,"movenn3",1) \
-  __(BC_MOVENN4,"movenn4",1) \
-  __(BC_MOVENN5,"movenn5",1) \
   /* Comparison */ \
   __(BC_LTNV,"ltnv",1) \
   __(BC_LTVN,"ltvn",1) \
@@ -219,11 +218,11 @@ extern struct CStr VARG;
   /* Load closure */ \
   __(BC_LOADCLS,"loadcls",1) \
   /* Optimization */ \
-  __(BC_LOADNN1,"loadnn1",0) \
-  __(BC_LOADNN2,"loadnn2",0) \
-  __(BC_LOADNN3,"loadnn3",0) \
-  __(BC_LOADNN4,"loadnn4",0) \
   __(BC_LOADNN5,"loadnn5",0) \
+  __(BC_LOADNN4,"loadnn4",0) \
+  __(BC_LOADNN3,"loadnn3",0) \
+  __(BC_LOADNN2,"loadnn2",0) \
+  __(BC_LOADNN1,"loadnn1",0) \
   __(BC_LOADN0,"loadn0",0) \
   __(BC_LOADN1,"loadn1",0) \
   __(BC_LOADN2,"loadn2",0) \
@@ -237,6 +236,11 @@ extern struct CStr VARG;
   __(BC_OP,"<OP>",0) \
   __(BC_A,"<A>",1) \
   __(BC_NOP,"nop",0)
+
+/* This directive basically counts that at most 11 special bytecode to
+ * load number directly (no need to get an arg of opcode from constant table ).
+ * The 11 comes from (-1 -- -5 + 0 + 1 -- 5 ) */
+#define BC_SPECIAL_NUMBER_SIZE 11
 
 /* Intrinsic function table */
 #define INTRINSIC_FUNCTION(__) \
