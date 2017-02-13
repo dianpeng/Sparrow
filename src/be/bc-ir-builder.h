@@ -81,33 +81,11 @@ struct Sparrow;
  *   loop body and patch any node reference to the j1 node to j3. Then we will
  *   have a correct loop isntallment.
  *
- *
- * Stack simluation maintain and renaming.
- *
- *   The key is that we need to approximately simluate the bytecode to get the
- *   correct stack states. The bytecode LOAD/PUSH and POP will be interpreted
- *   to make stack state correct. Additionally, when we start to analyze
- *   branch or loop, multiple stack must be kept , and those stack cannot be
- *   discarded until we finish merge.
- *
- *   To address this issue, we need to have a chain based stack tree instead of
- *   a linear stack. This stack tree will be used to maintain multiple parallel
- *   stack frame while we start to visit different branch.
- *
- *   To explicitly maintain such stack tree is complicated since a stack frame
- *   should be associated with a region/control flow node instead of chain to
- *   the root of the stack. Since we iterate each nodes along with the control
- *   flow node not stack. To ease the pain for building these stuff, we will
- *   need a sparse array to track the stack that region node need it. The sparse
- *   array is stored *out of index* and it is indexed by the node's id. Currently
- *   the sparse array is implemented as an array plus a linear search. We don't
- *   believe we will have huge amount of branches.
  */
 
 int BytecodeIrBuilderBuild( struct Sparrow* , struct IrGraph* ,
-                                              struct ObjProto* );
-
-
+                                              struct ObjProto*,
+                                              struct CStr* );
 
 
 #endif /* BC_IR_BUILDER_H_ */

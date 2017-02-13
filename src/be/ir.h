@@ -5,6 +5,7 @@
 
 struct IrNode;
 struct IrLink;
+struct IrGraph;
 
 /* IR ---> Intermediate Representation
  * IR in Sparrow is model with Cliff Click's doctor thesis, ie sea-of-nodes.
@@ -187,7 +188,7 @@ static SPARROW_STATIC_ASSERT int IrIsHighIR(int opcode) {
  * It will only be used when the local size is not enough */
 struct IrLink {
   IrNode** ir_arr;
-  uint32_t ir_sz;
+  uint32_t ir_size;
   uint32_t ir_cap;
 };
 
@@ -208,11 +209,11 @@ SPARROW_STATIC_ASSERT(sizeof(struct IrLink) == sizeof(struct IrNode*)*2,\
  * | irop :16 |
  * | kind : 2 |
  * | ....     |
- * ------------         ------------------------
- * |          |         |                      |
- * | Data/Ptr | ------->|   Out Of Line Storage|
- * |          |         |                      |
- * ------------         ------------------------
+ * ------------         ------------------------------
+ * |          |         |                            |
+ * | Data/Ptr | ------->|   Out Of Line Storage      |
+ * |          |         |                            |
+ * ------------         ------------------------------
  * The data set can also be *converted* to a pointer points to another
  * out of index storage. This is only needed when certain optimization want
  * to put *more* information into the area. The user could tell which kind
@@ -279,7 +280,21 @@ struct IrNode* IrNodeIndexInput( struct IrNode* node , size_t index ) {
 /* Resize an IrNode's data part to a out of line storage provided by allocator
  * with size *length*.
  * User is supposed to initialize data returned from IrNode */
-void* IrNodeResize( struct IrNode* , struct ArenaAllocator* , size_t );
+void* IrNodeResize( struct IrNode* , struct IrGraph* , size_t );
+
+/* General purpose IrNode creation */
+struct IrNode* IrNodeNew( struct IrGraph* , size_t data_size );
+struct IrNode* IrNodeNewControlFlow( struct IrGraph* , int op );
+struct IrNode* IrNodeNewBinary( struct IrGraph*, int op , struct IrNode* left ,
+                                                          struct IrNode* right);
+
+struct IrNode* IrNodeNewConstNumber( struct IrGraph* , uint32_t index ,
+                                                       const struct ObjProto* );
+struct IrNode* IrNodeNewConstString( struct IrGraph* , uint32_t index ,
+                                                       const struct ObjProto* );
+struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value );
+
+struct IrNode* IrNodeNewNull( struct IrGraph* );
 
 /* IR graph ==========================================================
  * IR graph is really just a high level name of a bundle that has lots of
@@ -294,7 +309,26 @@ struct IrGraph {
   int node_id;                 /* Current node ID */
   struct IrNode* start;        /* Start of the Node */
   struct IrNode* end  ;        /* End of the Node */
-  /* Internal data structure for optimization phases */
+
+  /* Tables for those node that is immutable */
+  struct IrNode** num_table; /* Constant Number table, in our bytecode, we
+                              * have specialized IR to load small integer,
+                              * those integer will not be here, but instead
+                              * they will be directly read it from the field */
+
+  /* Special number table, hold number ranging at [-5,+5] */
+  struct IrNode* spnum_table[BC_SPECIAL_NUMBER_SIZE];
+
+  /* Other primitive node */
+  struct IrNode* true_node;
+  struct IrNode* false_node;
+  struct IrNode* null_node;
+
+  /* String IR node */
+  struct IrNode** str_table; /* Constant string table */
 };
+
+/* Initialize a IrGraph object with regards to a specific protocol object */
+void IrGraphInit( struct IrGraph* , const struct ObjProto* , struct Sparrow* );
 
 #endif /* IR_H_ */

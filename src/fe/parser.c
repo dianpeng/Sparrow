@@ -1392,7 +1392,7 @@ static int _parse_branch( struct Parser* p , enum Token tk ,
   TRY(TK_LPAR); NEXT(); /* skip ( */
   /* Patch the previous branch to *this* jump if we have */
   if(tk == TK_ELIF)
-    cbpatchA(br->to,BC_JF,CodeBufferPos(codebuf(p)));
+    cbpatchA(br->to,BC_IF,CodeBufferPos(codebuf(p)));
   /* Parse condition , here we could do a simple DCE by evaluating
    * the condition. But it doesn't pays off since this DCE only works
    * by checking condition is constant or not. And I don't think there
@@ -1442,17 +1442,17 @@ static int parse_if( struct Parser* p ) {
   /* Check if we have TK_ELSE */
   if(LexerToken(&(p->lex)) == TK_ELSE) {
     NEXT(); /* Skip else */
-    cbpatchA(br.jmp,BC_JF,CodeBufferPos(codebuf(p)));
+    cbpatchA(br.jmp,BC_IF,CodeBufferPos(codebuf(p)));
     has_else = 1;
     if(parse_stmtorchunk(p,1)) return -1;
   }
 
   /* Patch the last if/elif branch jumpping to *here* */
-  if(!has_else) cbpatchA(br.jmp,BC_JF,CodeBufferPos(codebuf(p)));
+  if(!has_else) cbpatchA(br.jmp,BC_IF,CodeBufferPos(codebuf(p)));
 
   /* Close all jump out */
   for( i = 0 ; i < jo_sz ; ++i ) {
-    cbpatchA(jump_out[i],BC_JMP,CodeBufferPos(codebuf(p)));
+    cbpatchA(jump_out[i],BC_ENDIF,CodeBufferPos(codebuf(p)));
   }
   return 0;
 }

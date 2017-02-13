@@ -2152,23 +2152,14 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
     DISPATCH();
   }
 
-  CASE(BC_JMP) {
+  CASE(BC_JMP)
+  CASE(BC_ENDIF) {
     DECODE_ARG();
     frame->pc = opr;
     DISPATCH();
   }
 
-  CASE(BC_JT) {
-    DECODE_ARG();
-    tos = top(thread,0);
-    if(ValueToBoolean(rt,tos)) {
-      frame->pc = opr;
-    }
-    pop(thread,1);
-    DISPATCH();
-  }
-
-  CASE(BC_JF) {
+  CASE(BC_IF) {
     DECODE_ARG();
     tos = top(thread,0);
     if(!ValueToBoolean(rt,tos)) {

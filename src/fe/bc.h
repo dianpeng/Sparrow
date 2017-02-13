@@ -152,8 +152,10 @@ extern struct CStr VARG;
   __(BC_NEVV,"nevv",0) \
   /* Jump */ \
   __(BC_JMP,"jmp",1) \
-  __(BC_JT,"jt",1) \
-  __(BC_JF,"jf",1) \
+  __(BC_IF,"if",1) \
+  /* ENDIF is just an alias of JMP but it only generated in branch body. \
+   * The backend can easily know this is a jump jump to the merge node */ \
+  __(BC_ENDIF,"endif",1) \
   __(BC_BRT,"brt",1) \
   __(BC_BRF,"brf",1) \
   /* Call */ \
