@@ -283,16 +283,26 @@ struct IrNode* IrNodeIndexInput( struct IrNode* node , size_t index ) {
 void* IrNodeResize( struct IrNode* , struct IrGraph* , size_t );
 
 /* General purpose IrNode creation */
-struct IrNode* IrNodeNew( struct IrGraph* , size_t data_size );
-struct IrNode* IrNodeNewControlFlow( struct IrGraph* , int op );
+struct IrNode* IrNodeNew( struct IrGraph* , size_t data_size , struct IrNode* );
+
+struct IrNode* IrNodeNewControlFlow( struct IrGraph* , int op , struct IrNOde* );
+
 struct IrNode* IrNodeNewBinary( struct IrGraph*, int op , struct IrNode* left ,
-                                                          struct IrNode* right);
+                                                          struct IrNode* right,
+                                                          struct IrNode* region);
+
+struct IrNode* IrNodeNewUnary ( struct IrGraph* , int op, struct IrNode* operand,
+                                                          struct IrNode* region);
 
 struct IrNode* IrNodeNewConstNumber( struct IrGraph* , uint32_t index ,
-                                                       const struct ObjProto* );
+                                                       const struct ObjProto*);
 struct IrNode* IrNodeNewConstString( struct IrGraph* , uint32_t index ,
-                                                       const struct ObjProto* );
+                                                       const struct ObjProto*);
 struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value );
+
+#define IrNodeNewConstTrue(GRAPH) IrNodeNewConstBoolean(GRAPH,1)
+
+#define IrNodeNewConstFalse(GRAPH) IrNodeNewConstBoolean(GRAPH,0)
 
 struct IrNode* IrNodeNewNull( struct IrGraph* );
 

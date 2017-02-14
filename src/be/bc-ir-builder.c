@@ -95,204 +95,253 @@ static int build_graph( struct Sparrow* sparrow , const struct ObjProto* proto,
 #endif /* SPARROW_VM_NO_THREADING */
 
     CASE(BC_ADDNV) {
-      struct IrNode* num;
-      struct IrNode* val;
       struct IrNode* bin;
       DECODE_ARG();
-      num = IrNodeNewConstNumber(graph,opr,proto);
-      val = ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,num,val);
-      IrNodeAddInput( region , bin );
+      bin = IrNodeNewBinary( graph , IR_H_ADD ,
+          IrNodeNewConstNumber(graph,opr,proto),
+          ss_top(stack,0),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_ADDVN) {
-      struct IrNode* val;
-      struct IrNode* num;
       struct IrNode* bin;
       DECODE_ARG();
-      num = IrNodeNewConstNumber(graph,opr,proto);
-      val = ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,val,num);
+      bin = IrNodeNewBinary( graph , IR_H_ADD ,
+          ss_top(stack,0),
+          IrNodeNewConstNumber(graph,opr,proto),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_ADDSV) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = ss_top(stack,0); assert(left->type == IR_CONST_STRING);
-      right= IrNodeNewConstString(graph,opr,proto);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,0),
+          IrNodeNewConstString(graph,opr,proto),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_ADDVS) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = IrNodeNewConstString(graph,opr,proto);
-      right = ss_top(stack,0); assert(right->type == IR_CONST_STRING);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          IrNodeNewConstString(graph,opr,proto),
+          ss_top(stack,0),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_ADDVV) {
-      struct IrNode* left = ss_top(stack,1);
-      struct IrNode* right= ss_top(stack,0);
-      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,1),
+          ss_top(stack,0),
+          region);
       ss_pop(stack,2);ss_push(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_SUBNV) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = IrNodeNewConstNumber(graph,opr,proto);
-      right= ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          IrNodeNewConstNumber(graph,opr,proto),
+          ss_top(stack,0),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_SUBVN) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = IrNodeNewConstNumber(graph,opr,proto);
-      right= ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          IrNodeNewConstNumber(graph,opr,proto),
+          ss_top(stack,0),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_SUBVV) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
-      left = ss_top(stack,1);
-      right= ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
-      ss_pop(stack,2);
-      ss_push(stack,bin);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,1),
+          ss_top(stack,0),
+          region);
+      ss_pop(stack,2); ss_push(stack,bin);
       DISPATCH();
     }
     
     CASE(BC_MULNV) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = IrNodeNewConstNumber(graph,opr,proto);
-      right= ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          IrNodeNewConstNumber(graph,opr,proto),
+          ss_top(stack,0),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_MULVN) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = ss_top(stack,0);
-      right= IrNodeNewConstNumber(graph,opr,proto);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,0),
+          IrNodeNewConstNumber(graph,opr,proto),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_MULVV) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
-      left = ss_top(stack,1);
-      right= ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,1),
+          ss_top(stack,0),
+          region);
       ss_pop(stack,2);
       ss_push(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_DIVNV) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = IrNodeNewConstNumber(graph,opr,proto);
-      right = ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          IrNodeNewConstNumber(graph,opr,proto),
+          ss_top(stack,0),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_DIVVN) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = ss_top(stack,0);
-      right= IrNodeNewConstNumber(graph,opr,proto);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,0),
+          IrNodeNewConstNumber(graph,opr,proto),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_DIVV) {
-      struct IrNode* left = ss_top(stack,1);
-      struct IrNode* right= ss_top(stack,0);
-      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
-      ss_pop(stack,2);
-      ss_push(stack,bin);
+      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,1),
+          ss_top(stack,0),
+          region);
+      ss_pop(stack,2); ss_push(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_MODVN) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = IrNodeNewConstNumber(graph,opr,proto);
-      right= ss_top(stack,0);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          IrNodeNewConstNumber(graph,opr,proto),
+          ss_top(stack,0),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_MODNV) {
-      struct IrNode* left;
-      struct IrNode* right;
       struct IrNode* bin;
       DECODE_ARG();
-      left = ss_top(stack,0);
-      right= IrNodeNewConstNumber(graph,opr,proto);
-      bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,0),
+          IrNodeNewConstNumber(graph,opr,proto),
+          region);
       ss_replace(stack,bin);
       DISPATCH();
     }
 
     CASE(BC_MODVV) {
-      struct IrNode* left = ss_top(stack,1);
-      struct IrNode* right= ss_top(stack,0);
-      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,left,right);
-      ss_pop(stack,2);
-      ss_push(stack,bin);
+      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,1),
+          ss_top(stack,0),
+          region);
+      ss_pop(stack,2); ss_push(stack,bin);
       DISPATCH();
     }
 
+    CASE(BC_POWNV) {
+      struct IrNode* bin;
+      DECODE_ARG();
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          IrNodeNewConstNumber(graph,opr,proto),
+          ss_top(stack,0),
+          region);
+      ss_replace(stack,bin);
+      DISPATCH();
+    }
 
+    CASE(BC_POWVN) {
+      struct IrNode* bin;
+      DECODE_ARG();
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,0),
+          IrNodeNewConstNumber(graph,opr,proto),
+          region);
+      ss_replace(stack,0);
+      DISPATCH();
+    }
 
+    CASE(BC_POWVV) {
+      struct IrNode* bin;
+      bin = IrNodeNewBinary(graph,IR_H_ADD,
+          ss_top(stack,1),
+          ss_top(stack,0),
+          region);
+      ss_pop(stack,2); ss_push(stack,bin);
+      DISPATCH();
+    }
 
+    CASE(BC_NEG) {
+      struct IrNode* una = IrNodeNewUnary(graph,IR_H_NEG,
+          ss_top(stack,0),
+          region);
+      ss_replace(stack,una);
+      DISPATCH();
+    }
 
+    CASE(BC_NOT) {
+      struct IrNode* una = IrNodeNewUnary(graph,IR_H_NOT,
+          ss_top(stack,0),
+          region);
+      ss_replace(stack,una);
+      DISPATCH();
+    }
+
+    CASE(BC_TEST) {
+      struct IrNode* una = IrNodeNewUnary(graph,IR_H_TEST,
+          ss_top(stack,0),
+          region);
+      ss_replace(stack,una);
+      DISPATCH();
+    }
+
+    /* Constant loading instructions. For constant node we don't link
+     * it to the region node since we don't need to. If this node's value
+     * is not a dead value, then it will somehow be used in certain
+     * expression. Then obviously it will linked the graph later. Otherwise
+     * automatically it is DECed */
+    CASE(BC_LOADN) {
+      struct IrNode* n;
+      DECODE_ARG();
+      n = IrNodeNewConstNumber(graph,opr,proto);
+      ss_push(stack,n);
+      DISPATCH();
+    }
 
 
 
