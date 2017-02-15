@@ -294,6 +294,10 @@ struct IrNode* IrNodeNewBinary( struct IrGraph*, int op , struct IrNode* left ,
 struct IrNode* IrNodeNewUnary ( struct IrGraph* , int op, struct IrNode* operand,
                                                           struct IrNode* region);
 
+/* Function to get intrinsice number constant node. Number must be in range
+ * [-5,5] */
+struct IrNode* IrNodeGetConstNumber( struct IrGraph* , int32_t number );
+
 struct IrNode* IrNodeNewConstNumber( struct IrGraph* , uint32_t index ,
                                                        const struct ObjProto*);
 struct IrNode* IrNodeNewConstString( struct IrGraph* , uint32_t index ,
@@ -304,7 +308,12 @@ struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value );
 
 #define IrNodeNewConstFalse(GRAPH) IrNodeNewConstBoolean(GRAPH,0)
 
-struct IrNode* IrNodeNewNull( struct IrGraph* );
+struct IrNode* IrNodeNewConstNull( struct IrGraph* );
+
+/* Control flow node */
+struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* pred , struct IrNode* cond );
+struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
+struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
 
 /* IR graph ==========================================================
  * IR graph is really just a high level name of a bundle that has lots of
