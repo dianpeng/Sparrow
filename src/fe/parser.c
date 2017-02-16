@@ -965,27 +965,26 @@ struct LogicJump {
     ++sz; \
   } while(0)
 
-static int pexpr_logic( struct Parser* p , struct Expr* expr ) {
+static int pexpr_logic( struct Parser* p , const int (*tftab)[3],
+                                           enum Token oper,
+                                           int (*prev)( struct Parser* , struct Expr* ),
+                                           struct Expr* expr ) {
   struct Expr rexpr;
   struct LogicJump jmptb[LOGICOP_MAX];
   size_t sz = 0;
   enum Token tk;
   expr->cpos = CodeBufferGetLabel(codebuf(p));
-  if(pexpr_comp(p,expr)) return -1;
+  if(prev(p,expr)) return -1;
   tk = LexerToken(&(p->lex));
-  if(is_logicop(p) && is_nonebooleantype(expr)) _push_jmp();
-  while(is_logicop(p)) {
+  if(tk == oper && is_nonebooleantype(expr)) _push_jmp();
+  while(tk == oper) {
     int ltf,rtf;
     int result;
     NEXT();
     rexpr.cpos = CodeBufferGetLabel(codebuf(p));
-    if(pexpr_comp(p,&rexpr)) goto fail;
+    if(prev(p,&rexpr)) goto fail;
     ltf = _check_tf(expr); rtf = _check_tf(&rexpr);
-    switch(tk) {
-      case TK_AND : result = logic_andtab[ltf][rtf]; break;
-      case TK_OR : result = logic_ortab[ltf][rtf]; break;
-      default: assert(!"unreachable!"); break;
-    }
+    result = tftab[ltf][rtf];
     switch(result) {
       case LOGIC_TRUE:
         if(is_nonebooleantype(expr)) {
@@ -1014,7 +1013,7 @@ static int pexpr_logic( struct Parser* p , struct Expr* expr ) {
       default:
         if(is_nonebooleantype(&rexpr)) {
           expr->cpos = rexpr.cpos;
-          if(!is_logicop(p) ) {
+          if(LexerToken(&(p->lex)) != oper) {
             /* generate last *test* instruction , this is used
              * to rewrite the *last* component which doesn't have
              * a brf/brt instruction , to true or false value */
@@ -1024,7 +1023,7 @@ static int pexpr_logic( struct Parser* p , struct Expr* expr ) {
           }
         } else {
           if(tryemit_expr(p,&rexpr)) return -1;
-          if(!is_logicop(p) &&
+          if((LexerToken(&(p->lex)) != oper) &&
              (rexpr.tag != ETRUE && rexpr.tag != EFALSE)) {
             cbOP(BC_TEST); /* Generate a test to rewrite last value */
           }
@@ -1048,6 +1047,14 @@ fail:
 }
 
 #undef _push_jmp
+
+static int pexpr_logicand( struct Parser* p , struct Expr* expr ) {
+  return pexpr_logic(p,logic_andtab,TK_AND,pexpr_comp,expr);
+}
+
+static int pexpr_logicor( struct Parser* p , struct Expr* expr ) {
+  return pexpr_logic(p,logic_ortab,TK_OR,pexpr_logicand,expr);
+}
 
 /* *MUST* be none constant expression */
 #define is_pfixexpr(TAG) \
@@ -1372,7 +1379,7 @@ pexpr_atom( struct Parser* p , struct Expr* expr ) {
 }
 
 static int pexpr( struct Parser* p ,struct Expr* expr ) {
-  return pexpr_logic(p,expr);
+  return pexpr_logicor(p,expr);
 }
 
 /* Chunk */
@@ -1470,11 +1477,11 @@ static void _close_forjump( struct Parser* p ,
    * we jump out of the body */
   brk_jmp = CodeBufferPos(codebuf(p));
   for( i = 0 ; i < scp->bjmp_sz ; ++i ) {
-    cbpatchA(scp->bjmp[i],BC_JMP,brk_jmp);
+    cbpatchA(scp->bjmp[i],BC_BRK,brk_jmp);
   }
   /* continue jump */
   for( i = 0 ; i < scp->cjmp_sz ; ++i ) {
-    cbpatchA(scp->cjmp[i],BC_JMP,cont_jmp);
+    cbpatchA(scp->cjmp[i],BC_CONT,cont_jmp);
   }
 }
 

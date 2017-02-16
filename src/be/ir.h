@@ -315,6 +315,9 @@ struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* pred , struct IrNod
 struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
 
+/* Misc */
+struct IrNode* IrNodeNewPhi( struct IrGraph* , struct IrNode* left , struct IrNode* right );
+
 /* IR graph ==========================================================
  * IR graph is really just a high level name of a bundle that has lots of
  * information stored inside of it. It is just a piece of central data

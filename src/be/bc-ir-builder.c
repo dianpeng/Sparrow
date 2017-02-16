@@ -1,6 +1,11 @@
 #include "bc-ir-builder.h"
 #include "../fe/object.h"
 
+/* Forward =========================> */
+static int build_if( struct Sparrow* , struct BytecodeIrBuilder* );
+static int build_for(struct Sparrow* , struct BytecodeIrBuilder* );
+static int build_branch( struct Sparrow* , struct BytecodeIrBuilder* );
+
 struct StackStats {
   size_t stk_size;
   size_t stk_cap;
@@ -45,7 +50,7 @@ static void ss_place( struct StackStats* ss ,
   ss->stk_arr[index] = node;
 }
 
-static void ss_copy( const struct StackStats* src , struct StackStats* dest ) {
+static void ss_clone( const struct StackStats* src , struct StackStats* dest ) {
   size_t i;
   dest->stk_size = src->stk_size;
   dest->stk_cap = src->stk_cap;
@@ -53,23 +58,95 @@ static void ss_copy( const struct StackStats* src , struct StackStats* dest ) {
   memcpy(dest->stk_arr,src->stk_arr,dest->stk_size*sizeof(struct IrNode*));
 }
 
+static void ss_destroy( struct StackStats* ss ) {
+  free(ss->stk_arr);
+  ss->stk_size = ss->stk_cap = 0;
+  ss->stk_arr = NULL;
+}
+
+static void ss_move( struct StackStats* left , struct StackStats* right ) {
+  ss_destroy(left);
+  *left = *right;
+  right->stk_arr = NULL;
+  right->stk_size = right->stk_cap = 0;
+}
+
 /* IrBuilder ============================================== */
+struct MergedRegion {
+  uint32_t pos;
+  struct IrNode* node;
+};
+
+struct MergedRegionList {
+  struct MergedRegion* mregion_arr;
+  size_t mregion_size;
+  size_t mregion_cap;
+};
+
 struct BytecodeIrBuilder {
   const struct ObjProto* proto; /* Target proto */
   struct IrGraph* graph;     /* Targeted graph */
-  struct StackStats* stack; /* Current stack */
+  struct StackStats stack; /* Current stack */
   struct IrNode* region;     /* Current region node */
   size_t code_pos;           /* Current codei postion */
-  /* Error buffer */
-  struct CStr err;
+
+  /* An array of existed merged region. In our code, any time a branch
+   * merged region will be created only if it is not created already.
+   * Since our merge can have multiple phase, we need to put it into an
+   * array to look up later on */
+  struct MergedRegionList* mregion;
 };
 
-static int build_bytecode( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder ) {
+static void builder_clone( const struct BytecodeIrBuilder* old_builder ,
+                          struct BytecodeIrBuilder* new_builder ,
+                          struct IrNode* new_region ) {
+  new_builder->proto = old_builder->proto;
+  new_builder->graph = old_builder->graph;
+  ss_clone(&(old_builder->stack),&(new_builder->stack));
+  new_builder->region = new_region;
+  new_builder->code_pos = old_builder->code_pos;
+}
+
+static void builder_destroy( struct BytecodeIrBuilder* builder ) {
+  builder->proto = NULL;
+  builder->graph = NULL;
+  builder->region = NULL;
+  builder->code_pos = 0;
+  builder->mregion = NULL;
+  ss_destroy(&(builder->stack));
+}
+
+/* Merge the *right* bytecode_ir_builder into *left* builder . And the right
+ * hand side will be destroyed */
+static void builder_place_phi( struct BytecodeIrBuilder* left ,
+                               struct BytecodeIrBuilder* right ) {
+  size_t i;
+  const size_t len = MIN(left->stack.stk_size,right->stack.stk_size);
+  /* The merge really just means place PHI node. Our phi node is simply a
+   * node that takes 2 operands. Since we simply generate multiple branch
+   * as nested if else branch then our PHI node should be simply nested
+   * as well. We only care about the stack slot up to a point that left
+   * has it. For rest of the stack slot we will just discard them */
+  for( i = 0 ; i < len ; ++i ) {
+    left->stack.stk_arr[i] = IrNodeNewPhi(left->graph,left->stack.stk_arr[i],
+                                                      right->stack.stk_arr[i]);
+  }
+  builder_destroy(right);
+}
+
+static struct IrNode*
+builder_get_or_create_merged_region( const struct BytecodeIrBuilder* builder ,
+                                     uint32_t pos,
+                                     struct IrNode* if_true,
+                                     struct IrNode* if_false );
+
+static int build_bytecode( struct Sparrow* sparrow ,
+                           struct BytecodeIrBuilder* builder ) {
   size_t code_pos = builder->code_pos;
   const struct ObjProto* proto = builder->proto;
   struct IrGraph* graph = builder->graph;
   struct IrNode* region = builder->region;
-  struct StackStats* stack = builder->stack;
+  struct StackStats* stack = &(builder->stack);
   uint8_t op;
   uint32_t opr;
   const struct CodeBuffer* code_buffer = &(proto->code_buf);
@@ -172,7 +249,7 @@ static int build_bytecode( struct Sparrow* sparrow , struct BytecodeIrBuilder* b
       ss_pop(stack,2); ss_push(stack,bin);
       DISPATCH();
     }
-    
+
     CASE(BC_MULNV) {
       struct IrNode* bin;
       DECODE_ARG();
@@ -228,7 +305,7 @@ static int build_bytecode( struct Sparrow* sparrow , struct BytecodeIrBuilder* b
       DISPATCH();
     }
 
-    CASE(BC_DIVV) {
+    CASE(BC_DIVVV) {
       struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,
           ss_top(stack,1),
           ss_top(stack,0),
@@ -560,7 +637,7 @@ static int build_bytecode( struct Sparrow* sparrow , struct BytecodeIrBuilder* b
       ss_replace(stack,bin);
       DISPATCH();
     }
-    
+
     CASE(BC_LEVN) {
       struct IrNode* bin;
       DECODE_ARG();
@@ -635,7 +712,7 @@ static int build_bytecode( struct Sparrow* sparrow , struct BytecodeIrBuilder* b
       ss_replace(stack,bin);
       DISPATCH();
     }
-    
+
     CASE(BC_GTVS) {
       struct IrNode* bin;
       DECODE_ARG();
@@ -844,6 +921,8 @@ static int build_bytecode( struct Sparrow* sparrow , struct BytecodeIrBuilder* b
       DISPATCH();
     }
   }
+
+  /* bump the code pointer */
   builder->code_pos = code_pos;
   return 0;
 }
@@ -871,20 +950,22 @@ static int build_bytecode( struct Sparrow* sparrow , struct BytecodeIrBuilder* b
  * 1. A solo if:
  *
  *  ----------
- *  |        |
- *  |  If    |----------------------|
- *  |        |                      |
+ *  |        |       -----------
+ *  |  If    |-------| IfFalse |----|
+ *  |        |       -----------    |
  *  ----------                      |
  *      |                           |
  *      |                       -----------------
  *      |                       | fall through  |
- *      |                       |               |
  *      |                       -----------------
  *   ----------                     |
  *  |         |                     |
  *  |  IfTrue | --------------------|
  *  |         |
  *  -----------
+ *
+ *  The IfFalse branch will be *trivial* which means no statement will be linked
+ *  to that node.
  *
  *  We don't have a IfFalse region node in such case. The IfTrue region node
  *  directly merges to the fallthrough region node.
@@ -900,46 +981,127 @@ static int build_bytecode( struct Sparrow* sparrow , struct BytecodeIrBuilder* b
  * 3. A if-else if-else will be flatten into multiple layered IfElse branch.
  */
 
-static struct IrNode* build_branch_header( struct Sparrow* sparrow,
-                                           struct BytecodeIrBuilder* builder ) {
+static struct IrNode* build_if_header( struct Sparrow* sparrow,
+                                       struct BytecodeIrBuilder* builder ) {
   struct IrNode* ret = IrNodeNewIf(
-        builder->graph, /* graph */
-        builder->region,/* predecessor */
-        ss_top(builder->stack,0) /* predicate/condition */
+        builder->graph,             /* graph */
+        builder->region,            /* predecessor */
+        ss_top(&(builder->stack),0) /* predicate/condition */
         );
 
   (void)sparrow;
 
   /* pop the predicate */
-  ss_pop(builder->stack,0);
-
+  ss_pop(&(builder->stack),0);
   return ret;
 }
 
-static int build_branch( struct Sparrow* sparrow ,
-                         struct BytecodeIrBuilder* builder ) {
-  size_t code_pos = builder->code_pos;
+/* This function stop adding instruction at end or a ENDIF instruction is met,
+ * whichever comes first */
+static int build_if_block( struct Sparrow* sparrow,
+                           struct BytecodeIrBuilder* builder ,
+                           size_t end ) {
+  const struct ObjProto* proto  = builder->proto;
+  const struct CodeBuffer* code_buf = &(proto->code_buf);
+  while( builder->code_pos < end ) {
+    uint8_t op = code_buf->buf[builder->code_pos];
+    if(op == BC_ENDIF) {
+      return 0;
+    } else {
+      if(build_bytecode(sparrow,builder)) return -1;
+    }
+  }
+  return 0;
+}
+
+static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder ) {
   const struct ObjProto* proto = builder->proto;
   const struct CodeBuffer* code_buf = &(proto->code_buf);
   struct IrGraph* graph = builder->graph;
-  int op = code_buf->buf[code_pos];
-  struct IrNode* branch_header; /* branch header */
-  struct StackStats if_true_ss; /* If true stack */
-  struct StackStats if_false_ss;/* If false stack */
+  uint32_t merge_pos;
+  uint32_t if_false_pos;
+  struct IrNode* if_header;
+  struct IrNode* if_true;
+  struct IrNode* if_false;
+  struct BytecodeIrBuilder true_builder;
+  struct BytecodeIrBuilder false_builder;
 
-  assert(op == BC_IF);
+  (void)sparrow;
+  assert(code_buf->buf[builder->code_pos] == BC_IF);
 
   /* 0. Initialize the branch header */
-  branch_header = build_branch_header(sparrow,builder);
+  if_header = build_if_header(sparrow,builder);
 
   /* 1. Transform the IfTrue region or branch */
   {
-    struct IrNode* if_true = IrNodeNewIfTrue(graph,branch_header);
+    if_true = IrNodeNewIfTrue(graph,if_header);
 
-    /* Copy the current stack */
-    ss_copy(&if_true_ss,builder->stack);
+    /* Get a new builder */
+    builder_clone(&true_builder,builder,if_true);
 
+    /* Decode the argument of the BC_IF instruction */
+    if_false_pos = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
+    builder->code_pos +=4;
 
+    /* Build the IfTrue block */
+    if(!build_if_block(sparrow,&true_builder,if_false_pos)) return false;
+
+    /* Update the if_true region node */
+    if_true = true_builder.region;
+  }
+
+  /* 1. Transform the IfFalse region or branch */
+  {
+    if_false = IrNodeNewIfFalse(graph,if_header);
+
+    /* Now check if we do have none-trivial IfFalse block */
+    if( code_buf->buf[true_builder.code_pos] == BC_ENDIF ) {
+
+      assert( if_false_pos > true_builder.code_pos );
+
+      /* Generate a false_builder based on the existed builder */
+      builder_clone(&false_builder,builder,if_false);
+
+      /* Point to where the false branch begain */
+      false_builder.code_pos = if_false_pos ;
+
+      /* Now get where the merge region starts by get argument of instruction
+       * BC_ENDIF . We must have a ENDIF here */
+      merge_pos = CodeBufferDecodeArg(code_buf,true_builder.code_pos+1);
+
+      /* Build the IfFalse block */
+      if(build_if_block(sparrow,&false_builder,merge_pos)) return false;
+
+      /* After this build_if_block call, we should always see :
+       * assert opr == false_builder.code_pos since the branching one should
+       * already be correctly nested inside of the IfFalse branch */
+      assert(merge_pos == false_builder.code_pos);
+
+      /* Update the if_false region node */
+      if_false = false_builder.region;
+
+      /* Place the PHI nodes on the stack */
+      builder_place_phi( &true_builder, &false_builder );
+
+      ss_move(&(builder->stack) , &(true_builder.stack));
+      builder_destroy(&true_builder);
+    } else {
+      /* Place the PHI nodes on the stack */
+      builder_place_phi( builder, &true_builder );
+    }
+  }
+
+  /* 2. Generate the merge region and join the branch nodes */
+  {
+    struct IrNode* merge = builder_get_or_create_merged_region(builder,
+        merge_pos,
+        if_true,
+        if_false);
+    builder->region = merge;
+    builder->code_pos = merge_pos;
+  }
+
+  return 0;
 }
 
 

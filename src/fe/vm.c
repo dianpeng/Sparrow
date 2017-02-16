@@ -1601,7 +1601,22 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
 
   CASE(BC_LOADV) {
     DECODE_ARG();
-    push(thread,thread->stack[frame->base_ptr+opr]);
+    if(frame->base_ptr + opr >= thread->stack_size) {
+      /* We can have code that actually tries to load a stack slot that
+       * is not in used now , ie no previous push actually push any value
+       * to that slot. It is happened when user write code like:
+       * var c = c;
+       *
+       * In this case the LOADV will have a stack slot that is larger than
+       * the current stack size. In this case we just load a NULL value into
+       * c.
+       *
+       * We need to support this grammar for closure recursive call reason. */
+      Value v; Vset_null(&v);
+      push(thread,v);
+    } else {
+      push(thread,thread->stack[frame->base_ptr+opr]);
+    }
     DISPATCH();
   }
 
@@ -2152,7 +2167,8 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
     DISPATCH();
   }
 
-  CASE(BC_JMP)
+  CASE(BC_BRK)
+  CASE(BC_CONT)
   CASE(BC_ENDIF) {
     DECODE_ARG();
     frame->pc = opr;

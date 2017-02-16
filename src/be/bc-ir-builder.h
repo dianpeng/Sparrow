@@ -84,8 +84,6 @@ struct Sparrow;
  */
 
 int BytecodeIrBuilderBuild( struct Sparrow* , struct IrGraph* ,
-                                              struct ObjProto*,
-                                              struct CStr* );
-
+                                              struct ObjProto*);
 
 #endif /* BC_IR_BUILDER_H_ */

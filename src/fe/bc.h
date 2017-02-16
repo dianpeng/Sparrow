@@ -150,8 +150,12 @@ extern struct CStr VARG;
   __(BC_NEVNULL,"nevnull",0) \
   __(BC_NENULLV,"nenullv",0) \
   __(BC_NEVV,"nevv",0) \
-  /* Jump */ \
-  __(BC_JMP,"jmp",1) \
+  /* Control flow JUMP instructions */ \
+  /* Alias JUMP specialized for break and continue statements , ease the \
+   * pain when we do IR generation . The BC_BRK and BC_CONT is the same here. \
+   * we don't have forward jump and backward jump difference */ \
+  __(BC_BRK,"brk",1) \
+  __(BC_CONT,"cont",1) \
   __(BC_IF,"if",1) \
   /* ENDIF is just an alias of JMP but it only generated in branch body. \
    * The backend can easily know this is a jump jump to the merge node */ \
