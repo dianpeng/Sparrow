@@ -2550,6 +2550,7 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
     int invalid = 0;
     tos = top(thread,0);
     res = vm_forprep(rt,tos,&invalid,check);
+
     replace(thread,res); /* always push iterator to stack */
     if(invalid) {
       DECODE_ARG();

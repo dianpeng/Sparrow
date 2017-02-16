@@ -2,6 +2,8 @@
 #include "../fe/object.h"
 
 /* Forward =========================> */
+struct LoopBuilder;
+
 static int build_if( struct Sparrow* , struct BytecodeIrBuilder* );
 static int build_for(struct Sparrow* , struct BytecodeIrBuilder* );
 static int build_branch( struct Sparrow* , struct BytecodeIrBuilder* );
@@ -95,6 +97,9 @@ struct BytecodeIrBuilder {
    * Since our merge can have multiple phase, we need to put it into an
    * array to look up later on */
   struct MergedRegionList* mregion;
+
+  /* Loop builder , if we are in the loop, then this field will be set */
+  struct LoopBuilder* loop;
 };
 
 static void builder_clone( const struct BytecodeIrBuilder* old_builder ,
@@ -128,8 +133,12 @@ static void builder_place_phi( struct BytecodeIrBuilder* left ,
    * as well. We only care about the stack slot up to a point that left
    * has it. For rest of the stack slot we will just discard them */
   for( i = 0 ; i < len ; ++i ) {
-    left->stack.stk_arr[i] = IrNodeNewPhi(left->graph,left->stack.stk_arr[i],
-                                                      right->stack.stk_arr[i]);
+    struct IrNode* left_node = left->stack.stk_arr[i];
+    struct IrNode* right_node= right->stack.stk_arr[i];
+    if(left_node != right_node) {
+      left->stack.stk_arr[i] = IrNodeNewPhi(left->graph,left->stack.stk_arr[i],
+          right->stack.stk_arr[i]);
+    }
   }
   builder_destroy(right);
 }
@@ -138,7 +147,29 @@ static struct IrNode*
 builder_get_or_create_merged_region( const struct BytecodeIrBuilder* builder ,
                                      uint32_t pos,
                                      struct IrNode* if_true,
-                                     struct IrNode* if_false );
+                                     struct IrNode* if_false ) {
+  size_t i;
+  struct MergedRegion new_node;
+  struct IrNode* node = NULL;
+  assert(builder->mregion);
+  for( i = 0 ; i < builder->mregion->mregion_size ; ++i ) {
+    if(pos == builder->mregion->mregion_arr[i].pos) {
+      node = builder->mregion->mregion_arr[i].node;
+      break;
+    }
+  }
+  if(!node) {
+    new_node.pos = pos;
+    new_node.node = IrNodeNewMerge(builder->graph,if_true,if_false);
+    DynArrPush(builder->mregion,mregion,new_node);
+    node = new_node.node;
+  } else {
+    IrNodeAddInput(node,if_true);
+    IrNodeAddInput(node,if_false);
+  }
+
+  return node;
+}
 
 static int build_bytecode( struct Sparrow* sparrow ,
                            struct BytecodeIrBuilder* builder ) {
@@ -150,6 +181,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
   uint8_t op;
   uint32_t opr;
   const struct CodeBuffer* code_buffer = &(proto->code_buf);
+
+  (void)sparrow;
 
   /* Here we just use a switch case , no need to threading the code */
 #define DECODE_ARG() \
@@ -959,9 +992,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
  *      |                       | fall through  |
  *      |                       -----------------
  *   ----------                     |
- *  |         |                     |
  *  |  IfTrue | --------------------|
- *  |         |
  *  -----------
  *
  *  The IfFalse branch will be *trivial* which means no statement will be linked
@@ -985,8 +1016,8 @@ static struct IrNode* build_if_header( struct Sparrow* sparrow,
                                        struct BytecodeIrBuilder* builder ) {
   struct IrNode* ret = IrNodeNewIf(
         builder->graph,             /* graph */
-        builder->region,            /* predecessor */
-        ss_top(&(builder->stack),0) /* predicate/condition */
+        ss_top(&(builder->stack),0),/* predicate/condition */
+        builder->region             /* predecessor */
         );
 
   (void)sparrow;
@@ -1044,7 +1075,8 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
     builder->code_pos +=4;
 
     /* Build the IfTrue block */
-    if(!build_if_block(sparrow,&true_builder,if_false_pos)) return false;
+    if(!build_if_block(sparrow,&true_builder,if_false_pos))
+      return false;
 
     /* Update the if_true region node */
     if_true = true_builder.region;
@@ -1070,7 +1102,8 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
       merge_pos = CodeBufferDecodeArg(code_buf,true_builder.code_pos+1);
 
       /* Build the IfFalse block */
-      if(build_if_block(sparrow,&false_builder,merge_pos)) return false;
+      if(build_if_block(sparrow,&false_builder,merge_pos))
+        return false;
 
       /* After this build_if_block call, we should always see :
        * assert opr == false_builder.code_pos since the branching one should
@@ -1103,6 +1136,175 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
 
   return 0;
 }
+
+/* Loop IR graph building =============================================
+ *
+ * Our loop's bytecode is pretty much decroated so it is easy for
+ * us to detect a loop. A loop is always starts with bytecode BC_FORPREP
+ * which implicitly tells where to JUMP if the loop variant is out of
+ * scope. The loop variant is the TOS element. A loop is closed by
+ * BC_FORLOOP instruction which tells to jump back to the loop header.
+ * 
+ * The loop will be compiled into a relative complicated graph:
+ *
+ *        --------------
+ *    --- |  IfNode    |--------
+ *    |   --------------       |
+ *    |                        |
+ *    |                        |
+ * ----------              -------------
+ * | IfTrue |              | IfFalse   |--------------|
+ * ----------              -------------              |
+ *    |                                               |
+ *    |                                               |
+ *    |                                               |
+ *    |                                               |
+ * --------------                                     |
+ * | Loop       |<---------------|                    |
+ * --------------                |                    |
+ *    |                          |                ------------
+ *    |                          |                | LoopMerge|
+ *    |                          |                ------------
+ * --------------           -------------             |
+ * | LoopExit   |---------->| IfTrue    |             |
+ * --------------           -------------             |
+ *    |                                               |
+ *    |                                               |
+ *    |                                               |
+ *    |             --------------                    |
+ *    |------------>| IfFalse    |--------------------|
+ *                  --------------
+ *  This makes our life easier since we could easily correctly place the
+ *  BREAK and CONTINUE jump to the correct node
+ */
+
+struct LoopBuilder {
+  struct IrNode* pre_if;      /* The very first IF node to test loop variant */
+  struct IrNode* pre_if_true; /* The very first IF node's if_true branch */
+  struct IrNode* pre_if_false;/* The very first IF node's if_false branch */
+  struct IrNode* loop;        /* The loop body . Potentailly we could have many
+                               * loop body due to placement of break and continue */
+  struct IrNode* loop_exit;   /* Loop exit node */
+  struct IrNode* loop_exit_true; /* The loop exit node's true node */
+  struct IrNode* loop_exit_false;/* The loop exit node's false node */
+};
+
+static void setup_loop_builder( struct Sparrow* sparrow ,
+    struct BytecodeIrBuilder* builder ) {
+  (void)sparrow;
+  struct IrNode* loop_variant;
+
+  assert(builder->loop);
+
+  loop_variant = IrNodeNewIterTest(builder->graph,
+                                   ss_top(&(builder->stack),0),
+                                   builder->region);
+
+  ss_replace(&(builder->stack),loop_variant);
+
+  builder->loop->pre_if = IrNodeNewIf(
+      builder->graph,
+      loop_variant,
+      builder->region);
+
+  builder->loop->pre_if_true = IrNodeNewIfTrue(
+      builder->graph,
+      builder->loop->pre_if);
+
+  builder->loop->pre_if_false= IrNodeNewIfFalse(
+      builder->graph,
+      builder->loop->pre_if);
+
+  builder->loop->loop= IrNodeNewLoop(
+      builder->graph,
+      builder->loop->pre_if_true);
+
+  /* NOTES: the loop exit node is not linked with graph. The link will be
+   * done *after* everything is done */
+  builder->loop->loop_exit = IrNodeNewLoopExit(
+      builder->graph,
+      loop_variant);
+
+  builder->loop->loop_exit_true = IrNodeNewIfTrue(
+      builder->graph,
+      builder->loop->loop_exit);
+
+  builder->loop->loop_exit_false = IrNodeNewIfFalse(
+      builder->graph,
+      builder->loop->loop_exit);
+
+  /* Link the loop_exit_true */
+  IrNodeAddInput(builder->loop->loop,
+                 builder->loop->loop_exit_true);
+}
+
+static int build_loop_body( struct Sparrow* sparrow ,
+    struct BytecodeIrBuilder* builder ) {
+  const struct ObjProto* proto = builder->proto;
+  const struct CodeBuffer* code_buf = &(proto->code_buf);
+  struct LoopBuilder* loop = builder->loop;
+  uint8_t op;
+
+  (void)sparrow;
+
+  assert(builder->region == loop->region);
+
+  do {
+    op = code_buf->buf[builder->code_pos];
+    if(op == BC_FORLOOP) {
+      /* Leave the last BC_FORLOOP unconsumed */
+      break;
+    } else {
+      if(build_bytecode(sparrow,builder)) return -1;
+    }
+  } while(1);
+  return 0;
+}
+
+static int build_loop( struct Sparrow* sparrow ,
+    struct BytecodeIrBuilder* builder ) {
+  const struct ObjProto* proto = builder->proto;
+  const struct CodeBuffer* code_buf = &(proto->code_buf);
+  struct LoopBuilder loop;
+  struct LoopBuilder* saved_loop_builder;
+  struct BytecodeIrBuilder loop_body_builder;
+  uint32_t merge_pos;
+
+  /* Saved the current builder's loop when we are in nested loop */
+  saved_loop_builder = builder->loop;
+  builder->loop = &loop;
+
+  assert(code_buf->buf[builder->code_pos] == BC_FORPREP);
+
+  /* Get the merge region position */
+  merge_pos = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
+  builder->code_pos += 3;
+
+  /* 0. Setup all the loop builder context */
+  setup_loop_builder(sparrow,builder);
+
+  /* 1.  Phase1 : Generate code for the loop body */
+  {
+    /* TOS is the iterator */
+    builder_clone(&loop_body_builder,builder,loop.loop);
+
+    /* Build the loop body until we finish the current loop */
+    if(build_loop(sparrow,&loop_body_builder)) return -1;
+  }
+
+  /* 2. Phase2 : Generate PHI and modify all the node that reference the PHI
+   * node */
+  {
+    const size_t len = MIN(builder->stack.stk_size,
+                           loop_body_builder.stack.stk_size);
+    size_t i;
+
+    for( i = 0 ; i < len ; ++i ) {
+    }
+  }
+}
+
+
 
 
 

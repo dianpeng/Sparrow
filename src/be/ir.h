@@ -37,8 +37,8 @@ struct IrGraph;
  * dot format, then user is able to use graphviz to visualize it.
  *
  * IR doesn't have a fixed format but could have *multiple* information based on
- * type of the IR. All IR node has a common header IRBase , inside of the IRBase
- * we have a type field to help user *cast* the IRBase pointer to correct sub
+ * type of the IR. All IR node has a common header IrNode , inside of the IrNode
+ * we have a type field to help user *cast* the IrNode pointer to correct sub
  * type. It is really just traditional way to do single inheritance in C.
  */
 
@@ -46,6 +46,8 @@ struct IrGraph;
   X(CTL_START,"ctl_start") \
   /* loop header region */ \
   X(CTL_LOOP_HEADER,"ctl_loop_header") \
+  X(CTL_LOOP_BODY,"ctl_loop_body") \
+  X(CTL_LOOP_EXIT,"ctl_loop_exit") \
   /* place holder for a bunch of value */ \
   X(CTL_REGION,"ctl_region") \
   /* branch node */ \
@@ -109,7 +111,10 @@ struct IrGraph;
   X(H_CALLI,"h_calli") \
   X(H_NEG,"h_neg") \
   X(H_NOT,"h_not") \
-  X(H_TEST,"h_test")
+  X(H_TEST,"h_test") \
+  /* Iterator */ \
+  X(H_ITER_TEST,"h_iter_test") \
+  X(H_ITER_NEW ,"h_iter_new")
 
 #define ALL_IRS(X) \
   CONTROL_IR_LIST(X) \
@@ -230,6 +235,7 @@ struct IrNode {
                                 3. 2 means 2 input
                                 4. 3 means ooi storage
                               */
+  uint16_t mark_state:2 ;    /* 2 bits mark state for traversal of the graph */
   /* Misc data field for helping us identify IrNode */
   uint32_t id : 24;          /* Monotonic ID */
   union {
@@ -311,14 +317,22 @@ struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value );
 struct IrNode* IrNodeNewConstNull( struct IrGraph* );
 
 /* Control flow node */
-struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* pred , struct IrNode* cond );
+struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* cond, struct IrNode* pred );
 struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
+struct IrNode* IrNodeNewLoopHeader(struct IrGraph* , struct IrNode* cond );
+struct IrNode* IrNodeNewLoop(struct IrGraph* , struct IrNode* pred );
+struct IrNode* IrNodeNewLoopExit(struct IrGraph* , struct IrNode* pred );
+struct IrNode* IrNodeNewMerge(struct IrGraph* , struct IrNode* if_true , struct IrNode* if_false );
+
+/* Iterator */
+struct IrNode* IrNodeNewIterTest(struct IrGraph*, struct IrNode* value, struct IrNode* region);
+struct IrNode* IrNodeNewIterNew (struct IrGraph*, struct IrNode* value, struct IrNode* region);
 
 /* Misc */
 struct IrNode* IrNodeNewPhi( struct IrGraph* , struct IrNode* left , struct IrNode* right );
 
-/* IR graph ==========================================================
+/* IR graph ================================================================
  * IR graph is really just a high level name of a bundle that has lots of
  * information stored inside of it. It is just a piece of central data
  * structure to store information like , liveness analyze result , dominator
