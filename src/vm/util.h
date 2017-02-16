@@ -1,6 +1,6 @@
 #ifndef UTIL_H_
 #define UTIL_H_
-#include "conf.h"
+#include "../conf.h"
 
 #include <stdio.h>
 #include <stddef.h>

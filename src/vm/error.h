@@ -1,6 +1,6 @@
 #ifndef ERROR_H_
 #define ERROR_H_
-#include "../util.h"
+#include "util.h"
 
 #define PERR_OK  "no error!\n"
 /* Parser error */

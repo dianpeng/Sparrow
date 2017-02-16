@@ -1,7 +1,7 @@
 #ifndef IR_H_
 #define IR_H_
+#include "../../conf.h"
 #include "../util.h"
-#include "../conf.h"
 
 struct IrNode;
 struct IrLink;
@@ -114,7 +114,9 @@ struct IrGraph;
   X(H_TEST,"h_test") \
   /* Iterator */ \
   X(H_ITER_TEST,"h_iter_test") \
-  X(H_ITER_NEW ,"h_iter_new")
+  X(H_ITER_NEW ,"h_iter_new") \
+  X(H_ITER_DREF_KEY,"h_iter_dref_key") \
+  X(H_ITER_DREF_VAL,"h_iter_dref_val" )
 
 #define ALL_IRS(X) \
   CONTROL_IR_LIST(X) \
@@ -173,6 +175,10 @@ static SPARROW_INLINE int IrIsControl( int opcode ) {
   return IrGetKindCode(opcode) == IRKIND_CONTROL;
 }
 
+static SPARROW_INLINE int IrIsStatment(int opcode ) {
+  return !IrIsControl(opcode);
+}
+
 static SPARROW_INLINE int IrIsShared ( int opcode ) {
   return IrGetKindCode(opcode) == IRKIND_SHARED;
 }
@@ -189,110 +195,76 @@ static SPARROW_STATIC_ASSERT int IrIsHighIR(int opcode) {
   return IrGetKindCode(opcode) == IRKIND_HIGH_IROP;
 }
 
-/* IrLink is just a dynamic array that holds pointer to other inputs.
- * It will only be used when the local size is not enough */
-struct IrLink {
-  IrNode** ir_arr;
-  uint32_t ir_size;
-  uint32_t ir_cap;
+/* IrUse. A use structure represents the def-use/use-def chain element. Since
+ * the chain will be modified during IrGraph construction. We use a double
+ * linked list here to ease the pain for removing a certain use from the IR */
+struct IrUse {
+  struct IrUse* prev;
+  struct IrUse* next;
+  struct IrNode* node;
 };
 
-/* IrLink size must be 2 pointer length */
-SPARROW_STATIC_ASSERT(sizeof(struct IrLink) == sizeof(struct IrNode*)*2,\
-    IrLinkMustBe2);
-
-/* Node . A node just represents a node in an IR graph. It can have more
- * information based on the node tag . We will have fixed size of inline
- * storage of IrNode when a Node is allocated. But during the optimization
- * phase , we may want to store more information to a node in place, so
- * the information carried with IrNode should be able to grow but not impact
- * those node that *linked* to the IrNode.
+/* Node . A node just represents a node in an IR graph. It is the single element
+ * that is used to build IR graph. Node are labeled with OPCODE which indicates
+ * the semantic of the node itself. Each node has builtin storage that indicate
+ * its 1) use-def 2) def-use chains. Apart from that any other information is
+ * supposed to be stored inside of a out-of-index array by unique id of the node.
+ * A node will get its unique ID when it is created and it is a handy identity
+ * for user to use node to index to certain side information .
  *
- * Let's see an IrNode layout.
- * Any IrNode will have a IrNode as header.
- * ------------
- * | irop :16 |
- * | kind : 2 |
- * | ....     |
- * ------------         ------------------------------
- * |          |         |                            |
- * | Data/Ptr | ------->|   Out Of Line Storage      |
- * |          |         |                            |
- * ------------         ------------------------------
- * The data set can also be *converted* to a pointer points to another
- * out of index storage. This is only needed when certain optimization want
- * to put *more* information into the area. The user could tell which kind
- * of storage it is using by checking local bitflag. If local is 1, then
- * the cast will treat memory is local ; otherwise the data set will be
- * treated as a pointer
- */
+ *
+ * For a statment IrNode , (opcode != CONTROL_FLOW) , the IrNode's input and
+ * output will always pointed to use-def and def-use chain. For a control flow
+ * node. The Input and Output will be used as control follow sequences for
+ * forward and backward purpose.
+ *
+ * For expression that is related to a certain region node. It is represented
+ * by its private data structure which *only* used in ControlFlow node */
+
 struct IrNode {
   uint16_t op;
-  uint16_t local: 1;
   uint16_t immutable : 1;    /* Whether this node is immutable or not */
-  uint16_t input_size : 2;   /* 1. 0 means no input
-                                2. 1 means 1 input
-                                3. 2 means 2 input
-                                4. 3 means ooi storage
-                              */
+  uint16_t effect : 1;       /* This is a coarsed side effect analyzing while
+                              * the bytecode is translated into the IrGraph.
+                              * This will impact whether the node will be added
+                              * into the use chain of its belonging control flow
+                              * node */
   uint16_t mark_state:2 ;    /* 2 bits mark state for traversal of the graph */
-  /* Misc data field for helping us identify IrNode */
-  uint32_t id : 24;          /* Monotonic ID */
-  union {
-    struct IrNode* local[2]; /* Assume a generally 2 local maximum */
-    struct IrLink  ooi;      /* OutOfIndex storage */
-  } input;
+
+  uint32_t id;               /* Ir Unique ID . User could use it to index to
+                              * a side array for associating information that
+                              * is local to a certain optimization pass */
+
+  /* The following use-def and def-use chain's memory is owned by the Arena
+   * allocator inside of the IrGrpah */
+
+  /* Input chain or use def chain */
+  struct IrUse input_tail;
+  uint32_t input_size;
+
+  /* Output chain or def use chain */
+  struct IrUse output_tail;
+  uint32_t output_size;
 };
 
-/* Size constarints for IrNode */
-SPARROW_STATIC_ASSERT(sizeof(IrNode)==24,IrNodeSize);
+void IrNodeAddInput (struct IrGraph* , struct IrNode* node , struct IrNode* input_node );
+void IrNodeAddOutput(struct IrGraph* , struct IrNode* node , struct IrNode* output_node);
 
-/* Misc helper functions for IrNode */
+struct IrUse* IrNodeFindInput(struct IrNode* , struct IrNode* );
+struct IrUse* IrNodeFindOutput(struct IrNode*, struct IrNode* );
 
-/* Get IR's raw data */
-static SPARROW_INLINE void* IrNodeGetRawData( struct IrNode* node ) {
-  if(node->local) {
-    return (char*)(node) + sizeof(*node);
-  } else {
-    return *(void**)((char*)(node) + sizeof(*node));
-  }
-}
+struct IrUse* IrNodeRemoveInput(struct IrNode*,struct IrUse*);
+struct IrUse* IrNodeRemoveOutput(struct IrNode*,struct IrUse*);
 
-#define IrCastData(IR,TYPE) ((TYPE)(IrNodeGetRawData(IR)))
+void IrNodeAddControlFlow(struct IrGraph* , struct IrNode* pred , struct IrNode* succ );
 
-static SPARROW_INLINE uint32_t IrNodeGetInputSize( struct IrNode* node ) {
-  if(node->input_size == 3) {
-    return input.ooi.ir_sz;
-  } else {
-    assert(node->input_size > 2);
-    return node->input_size;
-  }
-}
-
-void IrNodeAddInput( struct IrNode* node , struct IrNode* input_node );
-
-static SPARROW_INLINE
-struct IrNode* IrNodeIndexInput( struct IrNode* node , size_t index ) {
-  if(index < 2) {
-    assert( index < node->input_size );
-    return node->input.local[index];
-  } else {
-    assert(node->input_size == 3);
-    assert(node->input.ooi.ir_sz > index);
-    return node->input.ooi.ir_arr[index];
-  }
-}
-
-/* Resize an IrNode's data part to a out of line storage provided by allocator
- * with size *length*.
- * User is supposed to initialize data returned from IrNode */
-void* IrNodeResize( struct IrNode* , struct IrGraph* , size_t );
+/* Helper macro for iterating the def-use/use-def chains */
+#define IrNodeInputEnd(IRNODE) (&((IRNODE)->input_tail))
+#define IrNodeOutputEnd(IRNODE) (&((IRNODE)->output_tail))
+#define IrNodeInputBegin(IRNODE) (((IRNODE)->input_tail).next)
+#define IrNodeOutputBegin(IRNODE) (((IRNODE)->output_tail).next)
 
 /* General purpose IrNode creation */
-struct IrNode* IrNodeNew( struct IrGraph* , size_t data_size , struct IrNode* );
-
-struct IrNode* IrNodeNewControlFlow( struct IrGraph* , int op , struct IrNOde* );
-
 struct IrNode* IrNodeNewBinary( struct IrGraph*, int op , struct IrNode* left ,
                                                           struct IrNode* right,
                                                           struct IrNode* region);
@@ -303,31 +275,53 @@ struct IrNode* IrNodeNewUnary ( struct IrGraph* , int op, struct IrNode* operand
 /* Function to get intrinsice number constant node. Number must be in range
  * [-5,5] */
 struct IrNode* IrNodeGetConstNumber( struct IrGraph* , int32_t number );
-
-struct IrNode* IrNodeNewConstNumber( struct IrGraph* , uint32_t index ,
-                                                       const struct ObjProto*);
-struct IrNode* IrNodeNewConstString( struct IrGraph* , uint32_t index ,
-                                                       const struct ObjProto*);
+struct IrNode* IrNodeNewConstNumber( struct IrGraph* , uint32_t index , const struct ObjProto* );
+struct IrNode* IrNodeNewConstString( struct IrGraph* , uint32_t index , const struct ObjProto* );
 struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value );
-
 #define IrNodeNewConstTrue(GRAPH) IrNodeNewConstBoolean(GRAPH,1)
-
 #define IrNodeNewConstFalse(GRAPH) IrNodeNewConstBoolean(GRAPH,0)
-
 struct IrNode* IrNodeNewConstNull( struct IrGraph* );
 
-/* Control flow node */
+/* Primitive */
+struct IrNode* IrNodeNewList( struct IrGraph* );
+
+/* For adding input into List/Map , do not use IrNodeAddInput/Output, but use
+ * following functions which takes care of the effect */
+void IrNodeListAddInput( struct IrGraph* ,
+                         struct IrNode*  ,
+                         struct IrNode*  ,
+                         struct IrNode* );
+
+struct IrNode* IrNodeNewMap( struct IrGraph* );
+
+void IrNodeMapAddInput( struct IrGraph* ,
+                        struct IrNode* map ,
+                        struct IrNode* key ,
+                        struct IrNode* val ,
+                        struct IrNode* region );
+
+/* Control flow node.
+ *
+ * Each control flow node can have *unbounded* Input node but fixed number of
+ * output node. EG: a binary branch will have to force you to add a If node
+ * since it is the only node that is able have 2 branches/output */
+struct IrNode* IrNodeNewRegion(struct IrGraph*);
 struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* cond, struct IrNode* pred );
 struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
-struct IrNode* IrNodeNewLoopHeader(struct IrGraph* , struct IrNode* cond );
 struct IrNode* IrNodeNewLoop(struct IrGraph* , struct IrNode* pred );
 struct IrNode* IrNodeNewLoopExit(struct IrGraph* , struct IrNode* pred );
-struct IrNode* IrNodeNewMerge(struct IrGraph* , struct IrNode* if_true , struct IrNode* if_false );
+
+size_t IrNodeControlFlowUseCount( struct IrNode* );
+#define IrNodeControlFlowUseEmpty(IRNODE) ((IrNodeControlFlowUseCount(IRNODE)) ==0)
+struct IrNode* IrNodeControFlowIndexUse( struct IrNode* , size_t index );
+void IrNodeControlFlowAddUse ( struct IrGraph*, struct IrNode* , struct IrNode* );
 
 /* Iterator */
 struct IrNode* IrNodeNewIterTest(struct IrGraph*, struct IrNode* value, struct IrNode* region);
 struct IrNode* IrNodeNewIterNew (struct IrGraph*, struct IrNode* value, struct IrNode* region);
+struct IrNode* IrNodeNewIterDrefKey(struct IrGraph* , struct IrNode* , struct IrNode* );
+struct IrNode* IrNodeNewIterDrefVal(struct IrGraph* , struct IrNode* , struct IrNode* );
 
 /* Misc */
 struct IrNode* IrNodeNewPhi( struct IrGraph* , struct IrNode* left , struct IrNode* right );
@@ -345,23 +339,6 @@ struct IrGraph {
   int node_id;                 /* Current node ID */
   struct IrNode* start;        /* Start of the Node */
   struct IrNode* end  ;        /* End of the Node */
-
-  /* Tables for those node that is immutable */
-  struct IrNode** num_table; /* Constant Number table, in our bytecode, we
-                              * have specialized IR to load small integer,
-                              * those integer will not be here, but instead
-                              * they will be directly read it from the field */
-
-  /* Special number table, hold number ranging at [-5,+5] */
-  struct IrNode* spnum_table[BC_SPECIAL_NUMBER_SIZE];
-
-  /* Other primitive node */
-  struct IrNode* true_node;
-  struct IrNode* false_node;
-  struct IrNode* null_node;
-
-  /* String IR node */
-  struct IrNode** str_table; /* Constant string table */
 };
 
 /* Initialize a IrGraph object with regards to a specific protocol object */

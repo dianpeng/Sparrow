@@ -6,7 +6,7 @@
 #include "error.h"
 #include "object.h"
 #include "vm.h"
-#include "../util.h"
+#include "util.h"
 
 #define BUILTIN_CHECK_ARGUMENT(...) \
   do { \

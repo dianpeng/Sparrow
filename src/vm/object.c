@@ -6,7 +6,7 @@
 #include "error.h"
 #include "builtin.h"
 #include "lexer.h"
-#include "../util.h"
+#include "util.h"
 
 #define __(A,B,C) const char* MetaOpsName_##B = (C);
 

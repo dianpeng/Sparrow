@@ -3,7 +3,7 @@
 #include "object.h"
 #include "error.h"
 #include "bc.h"
-#include "../util.h"
+#include "util.h"
 
 #include <stdarg.h>
 #include <assert.h>
@@ -961,7 +961,7 @@ struct LogicJump {
       return -1; \
     } \
     jmptb[sz].pos = cbputA(); \
-    jmptb[sz].instr= (tk == TK_AND ? BC_BRF : BC_BRT); \
+    jmptb[sz].instr= (oper == TK_AND ? BC_BRF : BC_BRT); \
     ++sz; \
   } while(0)
 

@@ -3,9 +3,8 @@
 #include <stddef.h>
 #include <assert.h>
 #include <errno.h>
-
 #include "../conf.h"
-#include "../util.h"
+#include "util.h"
 #include "bc.h"
 
 struct Sparrow;

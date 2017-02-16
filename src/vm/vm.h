@@ -2,7 +2,7 @@
 #define VM_H_
 #include "object.h"
 #include "bc.h"
-#include "../util.h"
+#include "util.h"
 
 /* Currently we don't support multiple threads */
 #define SIZE_OF_THREADS 1

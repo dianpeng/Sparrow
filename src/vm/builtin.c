@@ -3,7 +3,7 @@
 #include "list.h"
 #include "map.h"
 #include "gc.h"
-#include "sparrow.h"
+#include "loader.h"
 #include <sys/time.h>
 #include <limits.h>
 

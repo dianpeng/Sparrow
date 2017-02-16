@@ -1,5 +1,4 @@
 #include "error.h"
-#include "../util.h"
 
 
 #ifndef SPARROW_DEBUG

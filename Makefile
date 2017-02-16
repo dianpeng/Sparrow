@@ -1,25 +1,25 @@
-DEPENDEND=src/util.c src/fe/object.c src/fe/list.c src/fe/map.c src/fe/vm.c src/fe/bc.c src/fe/gc.c src/fe/builtin.c src/fe/error.c src/fe/sparrow.c src/fe/parser.c src/fe/lexer.c
+DEPENDEND=src/vm/util.c src/vm/object.c src/vm/list.c src/vm/map.c src/vm/vm.c src/vm/bc.c src/vm/gc.c src/vm/builtin.c src/vm/error.c src/vm/loader.c src/vm/parser.c src/vm/lexer.c
 COVERAGE=-fprofile-arcs -ftest-coverage
 SANITIZE=-fsanitize=address -fuse-ld=gold
 map:
-	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/fe/map_test.c -lm -o map-test
+	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/vm/map_test.c -lm -o map-test
 list:
-	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/fe/list_test.c -lm -o list-test
+	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/vm/list_test.c -lm -o list-test
 
 bc:
-	$(CC) -g3 -Wall -Werror src/util.c src/fe/bc.c src/fe/bc_test.c -o bc-test
+	$(CC) -g3 -Wall -Werror src/util.c src/vm/bc.c src/vm/bc_test.c -o bc-test
 
 object:
-	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/fe/object_test.c  -lm -o object-test
+	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/vm/object_test.c  -lm -o object-test
 
 parser:
-	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/fe/parser_test.c -lm -o parser-test
+	$(CC) -g3 -Wall -Werror $(DEPENDEND) src/vm/parser_test.c -lm -o parser-test
 
 vm:
-	$(CC) -Wall -Werror -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/fe/vm_test.c -lm -o vm-test
+	$(CC) -Wall -Werror -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) src/vm/vm_test.c -lm -o vm-test
 
 test:
-	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) src/fe/vm_test_driver.c -lm -o vm-test-driver
+	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) src/vm/vm_test_driver.c -lm -o vm-test-driver
 
 show_bc:
 	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) tools/show_bc.c -lm -o show_bc

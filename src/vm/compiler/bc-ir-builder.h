@@ -1,7 +1,7 @@
 #ifndef BC_IR_BUILDER_H_
 #define BC_IR_BUILDER_H_
 #include "ir.h"
-#include "../fe/bc.h"
+#include "../bc.h"
 
 struct IrGraph;
 struct Sparrow;

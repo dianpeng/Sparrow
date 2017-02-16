@@ -3,7 +3,7 @@
 #include "object.h"
 #include "list.h"
 #include "map.h"
-#include "../util.h"
+#include "util.h"
 
 #include <sys/time.h>
 #include <inttypes.h>

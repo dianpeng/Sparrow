@@ -1,5 +1,5 @@
-#ifndef SPARROW_H_
-#define SPARROW_H_
+#ifndef LOADER_H_
+#define LOADER_H_
 #include "object.h"
 
 int RunString( struct Sparrow* , const char* source , struct ObjMap* env,
@@ -8,4 +8,4 @@ int RunString( struct Sparrow* , const char* source , struct ObjMap* env,
 int RunFile( struct Sparrow* , const char* filepath , struct ObjMap* env,
     Value* ret , struct CStr* err );
 
-#endif /* SPARROW_H_ */
+#endif /* LOADER_H_ */

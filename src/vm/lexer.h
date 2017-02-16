@@ -1,6 +1,6 @@
 #ifndef LEX_H_
 #define LEX_H_
-#include "../util.h"
+#include "util.h"
 #include <stddef.h>
 #include <ctype.h>
 
