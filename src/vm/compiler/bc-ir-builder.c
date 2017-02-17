@@ -9,6 +9,8 @@ static int build_if( struct Sparrow* , struct BytecodeIrBuilder* );
 static int build_for(struct Sparrow* , struct BytecodeIrBuilder* );
 static int build_branch( struct Sparrow* , struct BytecodeIrBuilder* );
 
+/* Stack ================================= */
+
 struct StackStats {
   size_t stk_size;
   size_t stk_cap;
@@ -692,15 +694,16 @@ static int build_list( struct Sparrow* sparrow ,
   (void)sparrow;
 
   switch(op) {
-    case BC_NEWL0: size = 0; break;
-    case BC_NEWL1: size = 1; break;
-    case BC_NEWL2: size = 2; break;
-    case BC_NEWL3: size = 3; break;
-    case BC_NEWL4: size = 4; break;
+    case BC_NEWL0: builder->code_pos++ ; size = 0; break;
+    case BC_NEWL1: builder->code_pos++ ; size = 1; break;
+    case BC_NEWL2: builder->code_pos++ ; size = 2; break;
+    case BC_NEWL3: builder->code_pos++ ; size = 3; break;
+    case BC_NEWL4: builder->code_pos++ ; size = 4; break;
     default:
       assert(op == BC_NEWL);
       arg = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
       size = (int)arg;
+      builder->code_pos+=4;
       break;
   }
   list = IrNodeNewList( builder->graph );
@@ -714,7 +717,6 @@ static int build_list( struct Sparrow* sparrow ,
 
   ss_pop(&(builder->stack),size);
   ss_push(&(builder->stack),list);
-  builder->code_pos += 4;
   return 0;
 }
 
@@ -731,15 +733,16 @@ static int build_map( struct Sparrow* sparrow ,
 
   op = code_buf->buf[builder->code_pos];
   switch(op) {
-    case BC_NEWM0 : size = 0; break;
-    case BC_NEWM1 : size = 1; break;
-    case BC_NEWM2 : size = 2; break;
-    case BC_NEWM3 : size = 3; break;
-    case BC_NEWM4 : size = 4; break;
+    case BC_NEWM0 : builder->code_pos++ ; size = 0; break;
+    case BC_NEWM1 : builder->code_pos++ ; size = 1; break;
+    case BC_NEWM2 : builder->code_pos++ ; size = 2; break;
+    case BC_NEWM3 : builder->code_pos++ ; size = 3; break;
+    case BC_NEWM4 : builder->code_pos++ ; size = 4; break;
     default:
       assert(op == BC_NEWM);
       arg = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
       size = (int)arg;
+      builder->code_pos+=4;
       break;
   }
 
@@ -755,6 +758,83 @@ static int build_map( struct Sparrow* sparrow ,
 
   ss_pop(&(builder->stack),size*2);
   ss_push(&(builder->stack),map);
+  return 0;
+}
+
+static int build_call( struct Sparrow* sparrow ,
+                       struct BytecodeIrBuilder* builder ) {
+  uint8_t op;
+  int i;
+  int arg_count;
+  struct IrNode* function;
+  struct IrNode* call;
+  const struct CodeBuffer* code_buf = &(builder->proto->code_buf);
+
+  (void)sparrow;
+
+  op = code_buf->buf[ builder->code_pos ];
+  switch(op) {
+    case BC_CALL0:
+      arg_count = 0;
+      function = ss_top(&(builder->stack),0);
+      builder->code_pos++;
+      break;
+    case BC_CALL1:
+      arg_count = 1;
+      function = ss_top(&(builder->stack),1);
+      builder->code_pos++;
+      break;
+    case BC_CALL2:
+      arg_count = 2;
+      function = ss_top(&(builder->stack),2);
+      builder->code_pos++;
+      break;
+    case BC_CALL3:
+      arg_count = 3;
+      function = ss_top(&(builder->stack),3);
+      builder->code_pos++;
+      break;
+    case BC_CALL4:
+      arg_count = 4;
+      function = ss_top(&(builder->stack),4);
+      builder->code_pos++;
+      break;
+    default:
+      assert(op == BC_CALL);
+      arg_count = (int)CodeBufferDecodeArg(code_buf,builder->code_pos+1);
+      builder->code_pos+=4;
+      break;
+  }
+
+  call = IrNodeNewCall( builder->graph , function , builder->region );
+
+  for( i = arg_count - 1 ; i >= 0 ; --i ) {
+    IrNodeAddInput(builder->graph,
+                   call,
+                   ss_top(&(builder->stack),i));
+  }
+
+  ss_pop(&(builder->stack),arg_count+1);
+  return 0;
+}
+
+static int build_call_intrinsic( struct Sparrow* sparrow ,
+                                 struct BytecodeIrBuilder* builder ,
+                                 enum IntrinsicFunction func ) {
+  int i;
+  int arg_count;
+  struct IrNode* call;
+  const struct CodeBuffer* code_buf = &(builder->proto->code_buf);
+  (void)sparrow;
+  arg_count = (int)CodeBufferDecodeArg(code_buf,builder->code_pos+1);
+  call = IrNodeNewCallIntrinsic(builder->graph,func,builder->region);
+  for( i = arg_count -1 ; i >= 0 ; --i ) {
+    IrNodeAddInput(builder->graph,
+                   call,
+                   ss_top(&(builder->stack),i));
+  }
+
+  ss_pop(&(builder->stack),arg_count);
   builder->code_pos += 4;
   return 0;
 }
@@ -1192,6 +1272,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     /* BC_MOVENN5 */
     DO(5)
+
+#undef DO /* DO */
 
     /* Comparison operators ============================== */
     CASE(BC_LTNV) {
@@ -1631,6 +1713,176 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_NEWM4) {
       return build_map(sparrow,builder);
     }
+
+    /* Function call and return */
+    CASE(BC_CALL)
+    CASE(BC_CALL0)
+    CASE(BC_CALL1)
+    CASE(BC_CALL2)
+    CASE(BC_CALL3)
+    CASE(BC_CALL4) {
+      return build_call(sparrow,builder);
+    }
+
+    /* Return */
+    CASE(BC_RET) {
+      IrNodeNewReturn(builder->graph,
+                      IrNodeNewConstNull(builder->graph),
+                      builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+    CASE(BC_RETN) {
+      DECODE_ARG();
+      IrNodeNewReturn(builder->graph,
+          IrNodeNewConstNumber(builder->graph,opr,proto),
+          builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+    CASE(BC_RETS) {
+      DECODE_ARG();
+      IrNodeNewReturn(builder->graph,
+          IrNodeNewConstString(builder->graph,opr,proto),
+          builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+    CASE(BC_RETT) {
+      IrNodeNewReturn(builder->graph,
+          IrNodeNewConstTrue(builder->graph),
+          builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+    CASE(BC_RETF) {
+      IrNodeNewReturn(builder->graph,
+          IrNodeNewConstFalse(builder->graph),
+          builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+    CASE(BC_RETN0) {
+      IrNodeNewReturn(builder->graph,
+          IrNodeGetConstNumber(builder->graph,0),
+          builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+    CASE(BC_RETN1) {
+      IrNodeNewReturn(builder->graph,
+          IrNodeGetConstNumber(builder->graph,0),
+          builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+    CASE(BC_RETNN1) {
+      IrNodeNewReturn(builder->graph,
+          IrNodeGetConstNumber(builder->graph,-1),
+          builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+    CASE(BC_RETNULL) {
+      IrNodeNewReturn(builder->graph,
+          IrNodeNewConstNull(builder->graph),
+          builder->region);
+      builder->region = IrNodeNewRegion( builder->graph );
+      DISPATCH();
+    }
+
+#define DO(TYPE) \
+    CASE(BC_ICALL_##TYPE) { \
+      return build_call_intrinsic( sparrow , builder , IFUNC_##TYPE ); \
+    }
+
+    /* BC_ICALL_TYPEOF */
+    DO(TYPEOF)
+
+    /* BC_ICALL_ISBOOLEAN */
+    DO(ISBOOLEAN)
+
+    /* BC_ICALL_ISSTRING */
+    DO(ISSTRING)
+
+    /* BC_ICALL_ISNUMBER */
+    DO(ISNUMBER)
+
+    /* BC_ICALL_ISNULL */
+    DO(ISNULL)
+
+    /* BC_ICALL_ISLIST */
+    DO(ISLIST)
+
+    /* BC_ICALL_ISMAP */
+    DO(ISMAP)
+
+    /* BC_ICALL_ISCLOSURE */
+    DO(ISCLOSURE)
+
+    /* BC_ICALL_TOSTRING */
+    DO(TOSTRING)
+
+    /* BC_ICALL_TONUMBER */
+    DO(TONUMBER)
+
+    /* BC_ICALL_TOBOOLEAN */
+    DO(TOBOOLEAN)
+
+    /* BC_ICALL_PRINT */
+    DO(PRINT)
+
+    /* BC_ICALL_ERROR */
+    DO(ERROR)
+
+    /* BC_ICALL_ASSERT */
+    DO(ASSERT)
+
+    /* BC_ICALL_IMPORT */
+    DO(IMPORT)
+
+    /* BC_ICALL_SIZE */
+    DO(SIZE)
+
+    /* BC_ICALL_RANGE */
+    DO(RANGE)
+
+    /* BC_ICALL_LOOP */
+    DO(LOOP)
+
+    /* BC_ICALL_RUNSTRING */
+    DO(RUNSTRING)
+
+    /* BC_ICALL_MIN */
+    DO(MIN)
+
+    /* BC_ICALL_MAX */
+    DO(MAX)
+
+    /* BC_ICALL_SORT */
+    DO(SORT)
+
+    /* BC_ICALL_GET */
+    DO(GET)
+
+    /* BC_ICALL_SET */
+    DO(SET)
+
+    /* BC_ICALL_EXIST */
+    DO(EXIST)
+
+    /* BC_ICALL_MSEC */
+    DO(MSEC)
+
+#undef DO /* DO */
 
   }
 

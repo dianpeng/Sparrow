@@ -2,6 +2,7 @@
 #define IR_H_
 #include "../../conf.h"
 #include "../util.h"
+#include "../bc.h"
 
 struct IrNode;
 struct IrLink;
@@ -54,6 +55,7 @@ struct IrGraph;
   X(CTL_IF,"ctl_if") \
   X(CTL_TRUE,"ctl_true") \
   X(CTL_FALSE,"ctl_false") \
+  X(CTL_RET,"ctl_ret") \
   X(CTL_END,"ctl_end")
 
 
@@ -106,9 +108,7 @@ struct IrGraph;
   X(H_ITRKV,"h_itrkv") \
   X(H_ITRK ,"h_itrk") \
   X(H_ITRN ,"h_itrn") \
-  /* FuncCall */ \
-  X(H_CALL ,"h_call") \
-  X(H_CALLI,"h_calli") \
+  /* Unary */ \
   X(H_NEG,"h_neg") \
   X(H_NOT,"h_not") \
   X(H_TEST,"h_test") \
@@ -116,7 +116,10 @@ struct IrGraph;
   X(H_ITER_TEST,"h_iter_test") \
   X(H_ITER_NEW ,"h_iter_new") \
   X(H_ITER_DREF_KEY,"h_iter_dref_key") \
-  X(H_ITER_DREF_VAL,"h_iter_dref_val" )
+  X(H_ITER_DREF_VAL,"h_iter_dref_val" ) \
+  /* Function */ \
+  X(H_CALL,"h_call") \
+  X(H_CALL_INTRINSIC,"h_call_intrinsic")
 
 #define ALL_IRS(X) \
   CONTROL_IR_LIST(X) \
@@ -300,6 +303,13 @@ void IrNodeMapAddInput( struct IrGraph* ,
                         struct IrNode* val ,
                         struct IrNode* region );
 
+/* Function call */
+struct IrNode* IrNodeNewCall( struct IrGraph* , struct IrNode* function ,
+                                                struct IrNode* region );
+
+struct IrNode* IrNodeNewCallIntrinsic( struct IrGraph* , enum IntrinsicFunction func ,
+                                                         struct IrNode* region );
+
 /* Control flow node.
  *
  * Each control flow node can have *unbounded* Input node but fixed number of
@@ -311,6 +321,10 @@ struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewLoop(struct IrGraph* , struct IrNode* pred );
 struct IrNode* IrNodeNewLoopExit(struct IrGraph* , struct IrNode* pred );
+/* This function will link the Return node to end node in IrGraph automatically */
+struct IrNode* IrNodeNewReturn(struct IrGraph* ,
+                               struct IrNode* value ,
+                               struct IrNode* pred);
 
 size_t IrNodeControlFlowUseCount( struct IrNode* );
 #define IrNodeControlFlowUseEmpty(IRNODE) ((IrNodeControlFlowUseCount(IRNODE)) ==0)
