@@ -177,12 +177,12 @@ builder_get_or_create_merged_region( const struct BytecodeIrBuilder* builder ,
     new_node.pos = pos;
     new_node.node = IrNodeNewRegion(builder->graph);
     DynArrPush(builder->mregion,mregion,new_node);
-    IrNodeAddControlFlow(builder->graph,new_node.node,if_true);
-    IrNodeAddControlFlow(builder->graph,new_node.node,if_false);
+    IrNodeAddOutput(builder->graph,if_true,new_node.node);
+    IrNodeAddOutput(builder->graph,if_false,new_node.node);
     node = new_node.node;
   } else {
-    IrNodeAddControlFlow(builder->graph,node,if_true);
-    IrNodeAddControlFlow(builder->graph,node,if_false);
+    IrNodeAddOutput(builder->graph,node,if_true);
+    IrNodeAddOutput(builder->graph,node,if_false);
   }
 
   return node;
@@ -452,10 +452,10 @@ static void setup_loop_builder( struct Sparrow* sparrow ,
       builder->graph,
       builder->loop->loop_exit);
 
-  /* Link the loop_exit_true */
-  IrNodeAddInput(builder->graph,
-                 builder->loop->loop,
-                 builder->loop->loop_exit_true);
+  /* backedge of the loop */
+  IrNodeAddOutput(builder->graph,
+                  builder->loop->loop_exit_true,
+                  builder->loop->loop);
 }
 
 static int build_loop_body( struct Sparrow* sparrow ,
@@ -509,6 +509,9 @@ static int build_loop( struct Sparrow* sparrow ,
 
     /* Build the loop body until we finish the current loop */
     if(build_loop(sparrow,&loop_body_builder)) return -1;
+
+    /* Link the region in current builder to the loop_exit */
+    IrNodeAddOutput(builder->graph,builder->region,loop.loop_exit);
   }
 
   /* 2. Phase2 : Generate PHI and modify all the node that reference the PHI
@@ -574,7 +577,6 @@ static int build_loop( struct Sparrow* sparrow ,
   }
 
   /* 4. Final cleanup */
-  IrNodeAddControlFlow(builder->graph,builder->region,loop.loop_exit);
   builder->loop = saved_loop_builder;
   builder_destroy(&loop_body_builder);
 
@@ -710,7 +712,7 @@ static int build_list( struct Sparrow* sparrow ,
   list = IrNodeNewList( builder->graph );
 
   for( i = size - 1 ; i >= 0 ; --i ) {
-    IrNodeListAddInput(builder->graph,
+    IrNodeListAddArgument(builder->graph,
                        list,
                        ss_top(&(builder->stack),i),
                        builder->region);
@@ -750,7 +752,7 @@ static int build_map( struct Sparrow* sparrow ,
   map = IrNodeNewMap( builder->graph );
 
   for( i = 2 * ( size - 1 ) ; i >= 0 ; i -= 2 ) {
-    IrNodeMapAddInput(builder->graph,
+    IrNodeMapAddArgument(builder->graph,
                       map,
                       ss_top(&(builder->stack),i+1),
                       ss_top(&(builder->stack),i),
@@ -810,9 +812,7 @@ static int build_call( struct Sparrow* sparrow ,
   call = IrNodeNewCall( builder->graph , function , builder->region );
 
   for( i = arg_count - 1 ; i >= 0 ; --i ) {
-    IrNodeAddInput(builder->graph,
-                   call,
-                   ss_top(&(builder->stack),i));
+    IrNodeCallAddArg(builder->graph, call, ss_top(&(builder->stack),i));
   }
 
   ss_pop(&(builder->stack),arg_count+1);
@@ -830,9 +830,7 @@ static int build_call_intrinsic( struct Sparrow* sparrow ,
   arg_count = (int)CodeBufferDecodeArg(code_buf,builder->code_pos+1);
   call = IrNodeNewCallIntrinsic(builder->graph,func,builder->region);
   for( i = arg_count -1 ; i >= 0 ; --i ) {
-    IrNodeAddInput(builder->graph,
-                   call,
-                   ss_top(&(builder->stack),i));
+    IrNodeCallAddArg(builder->graph,call,ss_top(&(builder->stack),i));
   }
 
   ss_pop(&(builder->stack),arg_count);
@@ -1653,9 +1651,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       assert(loop);
 
       /* Link the current region to the loop exit node's if_false node */
-      IrNodeAddControlFlow(builder->graph,
-                           builder->region,
-                           loop->loop_exit_false);
+      IrNodeAddOutput(builder->graph,builder->region,loop->loop_exit_false);
 
       /* Currently for simplicity we just add a new region node here and
        * this node will be DCE . We could really just mark anything that
@@ -1670,7 +1666,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       assert(loop);
 
       /* Link the current region to the loop_exit node. */
-      IrNodeAddControlFlow(builder->graph,builder->region,loop->loop_exit);
+      IrNodeAddOutput(builder->graph,builder->region,loop->loop_exit);
 
       /* Same as BREAK , add a region node after the continue and it will
        * be DCEed. */
