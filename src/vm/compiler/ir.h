@@ -3,6 +3,7 @@
 #include "../../conf.h"
 #include "../util.h"
 #include "../bc.h"
+#include "../object.h"
 
 struct IrNode;
 struct IrLink;
@@ -58,7 +59,6 @@ struct IrGraph;
   X(CTL_RET,"ctl_ret") \
   X(CTL_END,"ctl_end")
 
-
 /* Shared IR list . IR here is shared throughout the optimization stage */
 #define SHARED_IR_LIST(X) \
   X(CTL_PHI,"c_phi")
@@ -76,7 +76,8 @@ struct IrGraph;
 /* Primitive IR list */
 #define PRIMITIVE_IR_LIST(X) \
   X(PRIMITIVE_LIST,"primitive_list") \
-  X(PRIMITIVE_MAP,"primitive_map")
+  X(PRIMITIVE_MAP,"primitive_map") \
+  X(PRIMITIVE_CLOSURE,"primitive_closure")
 
 /* High level IR , the IR is mostly a one-2-one mapping of the bytecode and with
  * some simplicity. It is the IR that is used to build IR graph */
@@ -99,15 +100,13 @@ struct IrGraph;
   X(H_UGET,"h_uget") \
   X(H_USET,"h_uset") \
   /* Property acesss without information */ \
-  X(H_PROP,"h_prop") \
-  X(H_PROPI,"h_propi") \
+  X(H_AGET,"h_aget") \
+  X(H_ASET,"h_aset") \
+  X(H_AGET_INTRINSIC,"h_aget_intrinsic") \
+  X(H_ASET_INTRINSIC,"h_aset_intrinsic") \
   /* Global */ \
   X(H_GGET,"h_gget") \
   X(H_GSET,"h_gset") \
-  /* Loop */ \
-  X(H_ITRKV,"h_itrkv") \
-  X(H_ITRK ,"h_itrk") \
-  X(H_ITRN ,"h_itrn") \
   /* Unary */ \
   X(H_NEG,"h_neg") \
   X(H_NOT,"h_not") \
@@ -129,7 +128,7 @@ struct IrGraph;
   HIGH_IROP_LIST(X)
 
 /* Define each IR list */
-#define X(A,B) IR_##A
+#define X(A,B) IR_##A,
 enum {
   CONTROL_IR__START = 0xff,
   CONTROL_IR_LIST(X)
@@ -194,7 +193,7 @@ static SPARROW_INLINE int IrIsPrimitive(int opcode) {
   return IrGetKindCode(opcode) == IRKIND_PRIMITIVE;
 }
 
-static SPARROW_STATIC_ASSERT int IrIsHighIR(int opcode) {
+static SPARROW_INLINE int IrIsHighIR(int opcode) {
   return IrGetKindCode(opcode) == IRKIND_HIGH_IROP;
 }
 
@@ -244,10 +243,12 @@ struct IrNode {
   /* Input chain or use def chain */
   struct IrUse input_tail;
   uint32_t input_size;
+  uint32_t input_max ;
 
   /* Output chain or def use chain */
   struct IrUse output_tail;
   uint32_t output_size;
+  uint32_t output_max ;
 };
 
 void IrNodeAddInput (struct IrGraph* , struct IrNode* node , struct IrNode* input_node );
@@ -303,12 +304,53 @@ void IrNodeMapAddInput( struct IrGraph* ,
                         struct IrNode* val ,
                         struct IrNode* region );
 
+/* A loaded closure is always no effect and not impcated by its upvalue */
+struct IrNode* IrNodeNewClosure( struct IrGraph* , int index );
+
 /* Function call */
 struct IrNode* IrNodeNewCall( struct IrGraph* , struct IrNode* function ,
                                                 struct IrNode* region );
 
 struct IrNode* IrNodeNewCallIntrinsic( struct IrGraph* , enum IntrinsicFunction func ,
                                                          struct IrNode* region );
+
+enum IntrinsicFunction IrNodeCallIntrinsicGetFunction( struct IrNode* );
+
+/* Attribute/Global/Upvalue */
+struct IrNode* IrNodeNewAGet( struct IrGraph* , struct IrNode* tos ,
+                                                struct IrNode* component,
+                                                struct IrNode* region );
+
+struct IrNode* IrNodeNewASet( struct IrGraph* , struct IrNode* tos ,
+                                                struct IrNode* component,
+                                                struct IrNode* value ,
+                                                struct IrNode* region );
+
+struct IrNode* IrNodeNewAGetIntrinsic( struct IrGraph* , struct IrNode* tos ,
+                                                         enum IntrinsicAttribute attr ,
+                                                         struct IrNode* region );
+
+struct IrNode* IrNodeNewASetIntrinsic( struct IrGraph* , struct IrNode* tos,
+                                                         enum IntrinsicAttribute attr ,
+                                                         struct IrNode* value ,
+                                                         struct IrNode* region );
+
+enum IntrinsicAttribute IrNodeAGetIntrinsicGetIntrinsic( struct IrNode* );
+enum IntrinsicAttribute IrNodeASetIntrinsicGetIntrinsic( struct IrNode* );
+
+struct IrNode* IrNodeNewUGet( struct IrGraph* , uint32_t index,
+                                                struct IrNode* region );
+
+struct IrNode* IrNodeNewUSet( struct IrGraph* , uint32_t index,
+                                                struct IrNode* value ,
+                                                struct IrNode* region );
+
+struct IrNode* IrNodeNewGGet( struct IrGraph* , struct IrNode* name ,
+                                                struct IrNode* region );
+
+struct IrNode* IrNodeNewGSet( struct IrGraph* , struct IrNode* name ,
+                                                struct IrNode* value ,
+                                                struct IrNode* region );
 
 /* Control flow node.
  *

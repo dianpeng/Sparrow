@@ -1,13 +1,33 @@
-var a = 0;
-var b = a;
-var c = a + 1;
-
-var foo = function( a ) {
-  var sum = 0;
-  for ( x in a ) {
-    sum = sum + x;
-  }
-  return sum;
+var foo = function( str ) {
+  print("This is foo:");
+  print(str);
+  print("\n");
 };
 
-foo([1,2,3,4,5]);
+var fib = function( x ) {
+  if(x <= 2) return x;
+  else {
+    return fib(x-1) + fib(x-2);
+  }
+};
+
+var sum = function ( list ) {
+  var ret = 0;
+  for( k,v in list ) {
+    ret = ret + v;
+  }
+  return ret;
+};
+
+var start = msec();
+var sum_all = 0;
+for( i in loop(1,10000000,1)) {
+  sum_all = sum_all + i;
+}
+print("SUM : ",sum_all,"\n");
+var end = msec();
+
+print("Use time :",end-start," micro seconds \n");
+for( i in loop(1,10,1) ) {
+  foo("Hello World");
+}

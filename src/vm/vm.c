@@ -1011,6 +1011,16 @@ int add_callframe( struct Runtime* rt ,int argnum ,
       thread->frame_cap = ncap;
     }
   }
+
+  /* Do a function argument number checking since we don't support
+   * variable length argument yet. We will support it soon I guess */
+  if(cls && (cls->proto->narg != (size_t)argnum)) {
+    exec_error(rt,PERR_FUNCCALL_ARG_SIZE_MISMATCH,cls->proto->proto.str,
+                                                  (int)cls->proto->narg,
+                                                  argnum);
+    return -1;
+  }
+
   frame = thread->frame + thread->frame_size;
   frame->narg = argnum;
   frame->closure = cls;

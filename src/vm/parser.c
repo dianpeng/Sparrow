@@ -1176,9 +1176,8 @@ static int _pexpr_pfix( struct Parser* p , struct Expr* lexpr ,
 
 static int pexpr_rpfix( struct Parser* p , struct Expr* expr ) {
   struct Expr rexpr;
-  int ret;
   if(pexpr_atom(p,expr)) return -1;
-  ret = _pexpr_pfix(p,expr,&rexpr);
+  if(_pexpr_pfix(p,expr,&rexpr)) return -1;
   if(rexpr.tag != EUNDEFINED) {
     switch(rexpr.tag) {
       case ENUMBER: cbA(BC_AGETN,rexpr.info); break;
@@ -1187,7 +1186,7 @@ static int pexpr_rpfix( struct Parser* p , struct Expr* expr ) {
       default: cbOP(BC_AGET); break;
     }
   }
-  return ret;
+  return 0;
 }
 
 static int
@@ -1825,7 +1824,7 @@ static int parse_assignorfunccall( struct Parser* p ) {
       int ret = pexpr_intrinsic(p,&lexpr);
       if(ret == 1) {
         if(emit_readvar(p,&lexpr)) goto fail;
-      }
+      } else if(ret <0) goto fail;
     } else {
       if(emit_readvar(p,&lexpr)) goto fail;
     }

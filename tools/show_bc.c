@@ -1,6 +1,6 @@
-#include "../src/fe/object.h"
-#include "../src/fe/vm.h"
-#include "../src/fe/parser.h"
+#include "../src/vm/object.h"
+#include "../src/vm/vm.h"
+#include "../src/vm/parser.h"
 #include <dirent.h>
 #include <stdlib.h>
 #include <stdio.h>

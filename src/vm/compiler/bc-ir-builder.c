@@ -3,10 +3,11 @@
 
 /* Forward =========================> */
 struct LoopBuilder;
+struct BytecodeIrBuilder;
 
 static int build_bytecode( struct Sparrow* , struct BytecodeIrBuilder* );
 static int build_if( struct Sparrow* , struct BytecodeIrBuilder* );
-static int build_for(struct Sparrow* , struct BytecodeIrBuilder* );
+static int build_loop(struct Sparrow* , struct BytecodeIrBuilder* );
 static int build_branch( struct Sparrow* , struct BytecodeIrBuilder* );
 
 /* Stack ================================= */
@@ -100,11 +101,11 @@ struct LoopBuilder {
 };
 
 struct BytecodeIrBuilder {
-  const struct ObjProto* proto; /* Target proto */
-  struct IrGraph* graph;     /* Targeted graph */
-  struct StackStats stack; /* Current stack */
-  struct IrNode* region;     /* Current region node */
-  size_t code_pos;           /* Current codei postion */
+  const struct ObjProto* proto; /* Target protocol, same value as closure->proto */
+  struct IrGraph* graph;        /* Targeted graph */
+  struct StackStats stack;      /* Current stack */
+  struct IrNode* region;        /* Current region node */
+  size_t code_pos;              /* Current codei postion */
 
   /* An array of existed merged region. In our code, any time a branch
    * merged region will be created only if it is not created already.
@@ -304,7 +305,7 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
 
     /* Build the IfTrue block */
     if(!build_if_block(sparrow,&true_builder,if_false_pos))
-      return false;
+      return -1;
 
     /* Update the if_true region node */
     if_true = true_builder.region;
@@ -331,7 +332,7 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
 
       /* Build the IfFalse block */
       if(build_if_block(sparrow,&false_builder,merge_pos))
-        return false;
+        return -1;
 
       /* After this build_if_block call, we should always see :
        * assert opr == false_builder.code_pos since the branching one should
@@ -465,7 +466,7 @@ static int build_loop_body( struct Sparrow* sparrow ,
 
   (void)sparrow;
 
-  assert(builder->region == loop->region);
+  assert(builder->region == builder->loop->loop);
 
   do {
     op = code_buf->buf[builder->code_pos];
@@ -864,8 +865,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
 #define DISPATCH() break
 
   op = code_buffer->buf[code_pos++];
-  switch(op) {
 
+  switch(op) {
     CASE(BC_ADDNV) {
       struct IrNode* bin;
       DECODE_ARG();
@@ -1192,6 +1193,18 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_LOADFALSE) {
       ss_push(stack,IrNodeNewConstFalse(graph));
+      DISPATCH();
+    }
+
+    CASE(BC_LOADCLS) {
+      DECODE_ARG();
+      ss_push(stack,IrNodeNewClosure(builder->graph,opr));
+      DISPATCH();
+    }
+
+    CASE(BC_POP) {
+      DECODE_ARG();
+      ss_pop(stack,opr);
       DISPATCH();
     }
 
@@ -1631,7 +1644,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     /* Loop */
     CASE(BC_FORPREP) {
-      return build_for(sparrow,builder);
+      return build_loop(sparrow,builder);
     }
 
     /* Loop Control */
@@ -1697,10 +1710,10 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     /* Primtive , mostly just List/Map allocation */
     CASE(BC_NEWL)
-    CASE(BC_NEWL0) {
-    CASE(BC_NEWL1) {
-    CASE(BC_NEWL2) {
-    CASE(BC_NEWL3) {
+    CASE(BC_NEWL0)
+    CASE(BC_NEWL1)
+    CASE(BC_NEWL2)
+    CASE(BC_NEWL3)
     CASE(BC_NEWL4) {
       return build_list(sparrow,builder);
     }
@@ -1884,8 +1897,182 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
 #undef DO /* DO */
 
-  }
+    /* Attribute/Upvalue/Global indexing .
+     * We have effect bit in the IrNode which is iused to indicate whether
+     * there will be a side effect for these operations potentially. Any
+     * function call will be treated as have side effect at very first.
+     * And a global value indexing and attribute indexing into a map will
+     * also be treated have side effect
+     *
+     * A list indexing will not be treated as have side effect since we don't
+     * support meta operation on list type.
+     * For any other indexing/attribute get on known type , it will be treated
+     * as no effect.
+     *
+     * Pay attention, the upvalue reference is not *effected* , but upvalue
+     * set is *effected* */
+    CASE(BC_AGETS) {
+      struct IrNode* comp;
+      struct IrNode* aget;
+      DECODE_ARG();
+      comp = IrNodeNewConstString( builder->graph , opr, proto );
+      aget = IrNodeNewAGet( builder->graph , ss_top(stack,0) , comp , region );
+      ss_replace(stack,aget);
+      DISPATCH();
+    }
 
+    CASE(BC_AGETI) {
+      struct IrNode* ageti;
+      DECODE_ARG();
+      ageti = IrNodeNewAGetIntrinsic( builder->graph , ss_top(stack,0),
+                                      (enum IntrinsicAttribute)(opr),
+                                      region );
+      ss_replace(stack,ageti);
+      DISPATCH();
+    }
+
+    CASE(BC_AGETN) {
+      struct IrNode* comp;
+      struct IrNode* aget;
+      DECODE_ARG();
+      comp = IrNodeNewConstNumber( builder->graph , opr , proto );
+      aget = IrNodeNewAGet( builder->graph , ss_top(stack,0) , comp , region );
+      DISPATCH();
+    }
+
+    CASE(BC_AGET) {
+      struct IrNode* tos = ss_top(stack,1);
+      struct IrNode* comp= ss_top(stack,0);
+      struct IrNode* aget = IrNodeNewAGet( builder->graph ,
+                                           tos,
+                                           comp,
+                                           region);
+      ss_pop(stack,2); ss_push(stack,aget);
+      DISPATCH();
+    }
+
+    CASE(BC_ASETN) {
+      struct IrNode* comp;
+      DECODE_ARG();
+      comp = IrNodeNewConstNumber(builder->graph,opr,proto);
+      IrNodeNewASet( builder->graph , ss_top(stack,1),
+                                      comp,
+                                      ss_top(stack,0),
+                                      region);
+      ss_pop(stack,2);
+      DISPATCH();
+    }
+
+    CASE(BC_ASETS) {
+      struct IrNode* comp;
+      DECODE_ARG();
+      comp = IrNodeNewConstString(builder->graph,opr,proto);
+      IrNodeNewASet( builder->graph , ss_top(stack,1),
+                                      comp,
+                                      ss_top(stack,0),
+                                      region);
+      ss_pop(stack,2);
+      DISPATCH();
+    }
+
+    CASE(BC_ASETI) {
+      DECODE_ARG();
+      IrNodeNewASetIntrinsic(builder->graph,ss_top(stack,1),
+                                            (enum IntrinsicAttribute)(opr),
+                                            ss_top(stack,0),
+                                            region);
+      ss_pop(stack,2);
+      DISPATCH();
+    }
+
+    CASE(BC_ASET) {
+      IrNodeNewASet(builder->graph,ss_top(stack,2), ss_top(stack,1),
+                                                    ss_top(stack,0),
+                                                    region);
+      ss_pop(stack,3);
+      DISPATCH();
+    }
+
+    CASE(BC_UGET) {
+      struct IrNode* uget;
+      DECODE_ARG();
+      uget = IrNodeNewUGet( builder->graph , opr , region );
+      ss_push(stack,uget);
+      DISPATCH();
+    }
+
+    CASE(BC_USET) {
+      DECODE_ARG();
+      IrNodeNewUSet( builder->graph , opr , ss_top(stack,0) , region );
+      ss_pop(stack,1);
+      DISPATCH();
+    }
+
+    CASE(BC_USETTRUE) {
+      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstTrue(builder->graph),
+                                            region );
+      DISPATCH();
+    }
+
+    CASE(BC_USETFALSE) {
+      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstFalse(builder->graph),
+                                            region );
+      DISPATCH();
+    }
+
+    CASE(BC_USETNULL) {
+      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstNull(builder->graph),
+                                            region );
+      DISPATCH();
+    }
+
+    CASE(BC_GGET) {
+      DECODE_ARG();
+      ss_push(stack,IrNodeNewGGet(builder->graph,IrNodeNewConstString(builder->graph,
+                                                         opr,
+                                                         proto),region));
+      DISPATCH();
+    }
+
+    CASE(BC_GSET) {
+      DECODE_ARG();
+      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,
+                                                        opr,
+                                                        proto),
+                                                        ss_top(stack,0),
+                                                        region);
+      ss_pop(stack,1);
+      DISPATCH();
+    }
+
+    CASE(BC_GSETTRUE) {
+      DECODE_ARG();
+      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto),
+                                   IrNodeNewConstTrue(builder->graph),
+                                   region);
+      DISPATCH();
+    }
+
+    CASE(BC_GSETFALSE) {
+      DECODE_ARG();
+      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto),
+                                   IrNodeNewConstFalse(builder->graph),
+                                   region);
+      DISPATCH();
+    }
+
+    CASE(BC_GSETNULL) {
+      DECODE_ARG();
+      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto),
+                                   IrNodeNewConstNull(builder->graph),
+                                   region);
+      DISPATCH();
+    }
+
+    default:
+      assert(!"Unreachable!");
+      DISPATCH();
+  }
   /* bump the code pointer */
   builder->code_pos = code_pos;
   return 0;
