@@ -1,4 +1,6 @@
 #include "bc-ir-builder.h"
+#include "ir.h"
+#include "../bc.h"
 #include "../object.h"
 
 /* Forward =========================> */
@@ -11,7 +13,6 @@ static int build_loop(struct Sparrow* , struct BytecodeIrBuilder* );
 static int build_branch( struct Sparrow* , struct BytecodeIrBuilder* );
 
 /* Stack ================================= */
-
 struct StackStats {
   size_t stk_size;
   size_t stk_cap;
@@ -29,35 +30,35 @@ static void ss_push( struct StackStats* ss, struct IrNode* node ) {
 }
 
 static void ss_pop( struct StackStats* ss, size_t num ) {
-  assert(num <= ss->stk_size);
+  SPARROW_ASSERT(num <= ss->stk_size);
   ss->stk_size -= num;
 }
 
 static struct IrNode* ss_top( struct StackStats* ss, size_t num ) {
-  assert(num < ss->stk_size);
+  SPARROW_ASSERT(num < ss->stk_size);
   return ss->stk_arr[ (ss->stk_size - 1) - num ];
 }
 
 static struct IrNode* ss_bot( struct StackStats* ss, size_t index ) {
-  assert(index < ss->stk_size);
+  SPARROW_ASSERT(index < ss->stk_size);
   return ss->stk_arr[index];
 }
 
 static struct IrNode* ss_replace( struct StackStats* ss ,
     struct IrNode* node ) {
-  assert(ss->stk_size > 0);
+  SPARROW_ASSERT(ss->stk_size > 0);
   ss->stk_arr[ (ss->stk_size-1) ] = node;
+  return node;
 }
 
 static void ss_place( struct StackStats* ss ,
     size_t index ,
     struct IrNode* node ) {
-  assert( index < ss->stk_size );
+  SPARROW_ASSERT( index < ss->stk_size );
   ss->stk_arr[index] = node;
 }
 
 static void ss_clone( const struct StackStats* src , struct StackStats* dest ) {
-  size_t i;
   dest->stk_size = src->stk_size;
   dest->stk_cap = src->stk_cap;
   dest->stk_arr = malloc(sizeof(struct IrNode*)*src->stk_size);
@@ -151,8 +152,9 @@ static void builder_place_phi( struct BytecodeIrBuilder* left ,
     struct IrNode* left_node = left->stack.stk_arr[i];
     struct IrNode* right_node= right->stack.stk_arr[i];
     if(left_node != right_node) {
-      left->stack.stk_arr[i] = IrNodeNewPhi(left->graph,left->stack.stk_arr[i],
-          right->stack.stk_arr[i]);
+      left->stack.stk_arr[i] = IrNodeNewPhi(left->graph,
+                                            left->stack.stk_arr[i],
+                                            right->stack.stk_arr[i]);
     }
   }
   builder_destroy(right);
@@ -166,7 +168,7 @@ builder_get_or_create_merged_region( const struct BytecodeIrBuilder* builder ,
   size_t i;
   struct MergedRegion new_node;
   struct IrNode* node = NULL;
-  assert(builder->mregion);
+  SPARROW_ASSERT(builder->mregion);
   for( i = 0 ; i < builder->mregion->mregion_size ; ++i ) {
     if(pos == builder->mregion->mregion_arr[i].pos) {
       node = builder->mregion->mregion_arr[i].node;
@@ -175,10 +177,8 @@ builder_get_or_create_merged_region( const struct BytecodeIrBuilder* builder ,
   }
   if(!node) {
     new_node.pos = pos;
-    new_node.node = IrNodeNewRegion(builder->graph);
+    new_node.node = IrNodeNewMerge(builder->graph,if_true,if_false);
     DynArrPush(builder->mregion,mregion,new_node);
-    IrNodeAddOutput(builder->graph,if_true,new_node.node);
-    IrNodeAddOutput(builder->graph,if_false,new_node.node);
     node = new_node.node;
   } else {
     IrNodeAddOutput(builder->graph,node,if_true);
@@ -287,7 +287,7 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
   struct BytecodeIrBuilder false_builder;
 
   (void)sparrow;
-  assert(code_buf->buf[builder->code_pos] == BC_IF);
+  SPARROW_ASSERT(code_buf->buf[builder->code_pos] == BC_IF);
 
   /* 0. Initialize the branch header */
   if_header = build_if_header(sparrow,builder);
@@ -311,14 +311,14 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
     if_true = true_builder.region;
   }
 
-  /* 1. Transform the IfFalse region or branch */
+  /* 2. Transform the IfFalse region or branch */
   {
     if_false = IrNodeNewIfFalse(graph,if_header);
 
     /* Now check if we do have none-trivial IfFalse block */
     if( code_buf->buf[true_builder.code_pos] == BC_ENDIF ) {
 
-      assert( if_false_pos > true_builder.code_pos );
+      SPARROW_ASSERT( if_false_pos > true_builder.code_pos );
 
       /* Generate a false_builder based on the existed builder */
       builder_clone(&false_builder,builder,if_false);
@@ -335,9 +335,9 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
         return -1;
 
       /* After this build_if_block call, we should always see :
-       * assert opr == false_builder.code_pos since the branching one should
+       * SPARROW_ASSERT opr == false_builder.code_pos since the branching one should
        * already be correctly nested inside of the IfFalse branch */
-      assert(merge_pos == false_builder.code_pos);
+      SPARROW_ASSERT(merge_pos == false_builder.code_pos);
 
       /* Update the if_false region node */
       if_false = false_builder.region;
@@ -350,10 +350,13 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
     } else {
       /* Place the PHI nodes on the stack */
       builder_place_phi( builder, &true_builder );
+
+      /* Merge pos is the current position where the code halts */
+      merge_pos = true_builder.code_pos;
     }
   }
 
-  /* 2. Generate the merge region and join the branch nodes */
+  /* 3. Generate the merge region and join the branch nodes */
   {
     struct IrNode* merge = builder_get_or_create_merged_region(builder,
         merge_pos,
@@ -413,7 +416,7 @@ static void setup_loop_builder( struct Sparrow* sparrow ,
   (void)sparrow;
   struct IrNode* loop_variant;
 
-  assert(builder->loop);
+  SPARROW_ASSERT(builder->loop);
 
   loop_variant = IrNodeNewIterTest(builder->graph,
                                    ss_top(&(builder->stack),0),
@@ -466,7 +469,7 @@ static int build_loop_body( struct Sparrow* sparrow ,
 
   (void)sparrow;
 
-  assert(builder->region == builder->loop->loop);
+  SPARROW_ASSERT(builder->region == builder->loop->loop);
 
   do {
     op = code_buf->buf[builder->code_pos];
@@ -493,7 +496,7 @@ static int build_loop( struct Sparrow* sparrow ,
   saved_loop_builder = builder->loop;
   builder->loop = &loop;
 
-  assert(code_buf->buf[builder->code_pos] == BC_FORPREP);
+  SPARROW_ASSERT(code_buf->buf[builder->code_pos] == BC_FORPREP);
 
   /* Get the merge region position */
   merge_pos = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
@@ -508,7 +511,7 @@ static int build_loop( struct Sparrow* sparrow ,
     builder_clone(&loop_body_builder,builder,loop.loop);
 
     /* Build the loop body until we finish the current loop */
-    if(build_loop(sparrow,&loop_body_builder)) return -1;
+    if(build_loop_body(sparrow,&loop_body_builder)) return -1;
 
     /* Link the region in current builder to the loop_exit */
     IrNodeAddOutput(builder->graph,builder->region,loop.loop_exit);
@@ -538,7 +541,7 @@ static int build_loop( struct Sparrow* sparrow ,
           struct IrNode* victim = start->node;
           if(victim != phi) {
             struct IrUse* use_place = IrNodeFindInput(victim,right);
-            assert(use_place);
+            SPARROW_ASSERT(use_place);
 
             /* patched the used place to use new phi node */
             use_place->node = phi;
@@ -570,8 +573,8 @@ static int build_loop( struct Sparrow* sparrow ,
     builder->region = merge;
 
     /* SANITY CHECK ************************** */
-    assert( code_buf->buf[ loop_body_builder.code_pos ] == BC_FORLOOP );
-    assert( loop_body_builder.code_pos + 4 == merge_pos );
+    SPARROW_ASSERT( code_buf->buf[ loop_body_builder.code_pos ] == BC_FORLOOP );
+    SPARROW_ASSERT( loop_body_builder.code_pos + 4 == merge_pos );
 
     builder->code_pos = merge_pos;
   }
@@ -633,7 +636,7 @@ static int build_branch( struct Sparrow* sparrow ,
   uint32_t jump_pos;
 
   op = code_buf->buf[builder->code_pos];
-  assert(op == BC_BRF || op == BC_BRT);
+  SPARROW_ASSERT(op == BC_BRF || op == BC_BRT);
   jump_pos = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
 
   /* 0. Setup fallthrough branch */
@@ -703,7 +706,7 @@ static int build_list( struct Sparrow* sparrow ,
     case BC_NEWL3: builder->code_pos++ ; size = 3; break;
     case BC_NEWL4: builder->code_pos++ ; size = 4; break;
     default:
-      assert(op == BC_NEWL);
+      SPARROW_ASSERT(op == BC_NEWL);
       arg = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
       size = (int)arg;
       builder->code_pos+=4;
@@ -714,11 +717,10 @@ static int build_list( struct Sparrow* sparrow ,
   for( i = size - 1 ; i >= 0 ; --i ) {
     IrNodeListAddArgument(builder->graph,
                        list,
-                       ss_top(&(builder->stack),i),
-                       builder->region);
+                       ss_top(&(builder->stack),i));
   }
 
-  IrNodeListAddRegion(builder->graph,list,builder->region);
+  IrNodeListSetRegion(builder->graph,list,builder->region);
 
   ss_pop(&(builder->stack),size);
   ss_push(&(builder->stack),list);
@@ -744,7 +746,7 @@ static int build_map( struct Sparrow* sparrow ,
     case BC_NEWM3 : builder->code_pos++ ; size = 3; break;
     case BC_NEWM4 : builder->code_pos++ ; size = 4; break;
     default:
-      assert(op == BC_NEWM);
+      SPARROW_ASSERT(op == BC_NEWM);
       arg = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
       size = (int)arg;
       builder->code_pos+=4;
@@ -757,11 +759,10 @@ static int build_map( struct Sparrow* sparrow ,
     IrNodeMapAddArgument(builder->graph,
                       map,
                       ss_top(&(builder->stack),i+1),
-                      ss_top(&(builder->stack),i),
-                      builder->region);
+                      ss_top(&(builder->stack),i));
   }
 
-  IrNodeMapAddRegion(builder->graph,map,builder->region);
+  IrNodeMapSetRegion(builder->graph,map,builder->region);
 
   ss_pop(&(builder->stack),size*2);
   ss_push(&(builder->stack),map);
@@ -807,8 +808,9 @@ static int build_call( struct Sparrow* sparrow ,
       builder->code_pos++;
       break;
     default:
-      assert(op == BC_CALL);
+      SPARROW_ASSERT(op == BC_CALL);
       arg_count = (int)CodeBufferDecodeArg(code_buf,builder->code_pos+1);
+      function = ss_top(&(builder->stack),arg_count);
       builder->code_pos+=4;
       break;
   }
@@ -1652,7 +1654,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     /* Loop Control */
     CASE(BC_BRK) {
       struct LoopBuilder* loop = builder->loop;
-      assert(loop);
+      SPARROW_ASSERT(loop);
 
       /* Link the current region to the loop exit node's if_false node */
       IrNodeAddOutput(builder->graph,builder->region,loop->loop_exit_false);
@@ -1667,7 +1669,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_CONT) {
       struct LoopBuilder* loop = builder->loop;
-      assert(loop);
+      SPARROW_ASSERT(loop);
 
       /* Link the current region to the loop_exit node. */
       IrNodeAddOutput(builder->graph,builder->region,loop->loop_exit);
@@ -1680,22 +1682,29 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     /* Iterator related */
     CASE(BC_IDREFK) {
-      struct IrNode* n = IrNodeNewIterDrefKey(builder->graph,
-          ss_top(stack,0),
+      struct IrNode* n = IrNodeNewProjection(
+          builder->graph,
+          IrNodeNewIterDref(builder->graph, ss_top(stack,0), builder->region),
+          0,
           builder->region);
       ss_push(stack,n);
       DISPATCH();
     }
 
     CASE(BC_IDREFKV) {
-      struct IrNode* k = IrNodeNewIterDrefKey(builder->graph,
+      struct IrNode* kv = IrNodeNewIterDref(builder->graph,
           ss_top(stack,0),
           builder->region);
-      struct IrNode* v = IrNodeNewIterDrefVal(builder->graph,
-          ss_top(stack,0),
+      struct IrNode* key = IrNodeNewProjection(builder->graph,
+          kv,
+          0,
           builder->region);
-      ss_push(stack,k);
-      ss_push(stack,v);
+      struct IrNode* val = IrNodeNewProjection(builder->graph,
+          kv,
+          1,
+          builder->region);
+      ss_push(stack,key);
+      ss_push(stack,val);
       DISPATCH();
     }
 
@@ -2009,18 +2018,21 @@ static int build_bytecode( struct Sparrow* sparrow ,
     }
 
     CASE(BC_USETTRUE) {
+      DECODE_ARG();
       IrNodeNewUSet( builder->graph , opr , IrNodeNewConstTrue(builder->graph),
                                             region );
       DISPATCH();
     }
 
     CASE(BC_USETFALSE) {
+      DECODE_ARG();
       IrNodeNewUSet( builder->graph , opr , IrNodeNewConstFalse(builder->graph),
                                             region );
       DISPATCH();
     }
 
     CASE(BC_USETNULL) {
+      DECODE_ARG();
       IrNodeNewUSet( builder->graph , opr , IrNodeNewConstNull(builder->graph),
                                             region );
       DISPATCH();
@@ -2070,7 +2082,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     }
 
     default:
-      assert(!"Unreachable!");
+      SPARROW_UNREACHABLE();
       DISPATCH();
   }
   /* bump the code pointer */

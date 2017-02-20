@@ -1,4 +1,4 @@
-DEPENDEND=-DSPARROW_DEBUG src/vm/util.c src/vm/object.c src/vm/list.c src/vm/map.c src/vm/vm.c src/vm/bc.c src/vm/gc.c src/vm/builtin.c src/vm/error.c src/vm/loader.c src/vm/parser.c src/vm/lexer.c
+DEPENDEND=-DSPARROW_DEBUG src/vm/util.c src/vm/object.c src/vm/list.c src/vm/map.c src/vm/vm.c src/vm/bc.c src/vm/gc.c src/vm/builtin.c src/vm/error.c src/vm/loader.c src/vm/parser.c src/vm/lexer.c src/vm/debug.c
 COVERAGE=-fprofile-arcs -ftest-coverage
 SANITIZE=-fsanitize=address -fuse-ld=gold
 map:

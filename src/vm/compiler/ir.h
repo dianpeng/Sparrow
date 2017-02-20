@@ -4,6 +4,7 @@
 #include "../util.h"
 #include "../bc.h"
 #include "../object.h"
+#include "../debug.h"
 
 struct IrNode;
 struct IrLink;
@@ -31,7 +32,7 @@ struct IrGraph;
  * data structure for any methods are been jitting .
  *
  *
- * IR Lowering is inpace. The optimization algorithm will just modify the IR
+ * IR Lowering is in space. The optimization algorithm will just modify the IR
  * in place . Since IR just a loosely connected graph, modify the graph is just
  * changing some pointers.
  *
@@ -47,21 +48,23 @@ struct IrGraph;
 #define CONTROL_IR_LIST(X) \
   X(CTL_START,"ctl_start") \
   /* loop header region */ \
-  X(CTL_LOOP_HEADER,"ctl_loop_header") \
-  X(CTL_LOOP_BODY,"ctl_loop_body") \
+  X(CTL_LOOP,"ctl_loop") \
   X(CTL_LOOP_EXIT,"ctl_loop_exit") \
+  /* merge region , the only region that can have PHI */ \
+  X(CTL_MERGE,"ctl_merge") \
   /* place holder for a bunch of value */ \
   X(CTL_REGION,"ctl_region") \
   /* branch node */ \
   X(CTL_IF,"ctl_if") \
-  X(CTL_TRUE,"ctl_true") \
-  X(CTL_FALSE,"ctl_false") \
+  X(CTL_IF_TRUE,"ctl_if_true") \
+  X(CTL_IF_FALSE,"ctl_if_false") \
   X(CTL_RET,"ctl_ret") \
   X(CTL_END,"ctl_end")
 
 /* Shared IR list . IR here is shared throughout the optimization stage */
 #define SHARED_IR_LIST(X) \
-  X(CTL_PHI,"c_phi")
+  X(PHI,"c_phi") \
+  X(PROJECTION,"c_projection")
 
 /* Constant IR list. */
 #define CONSTANT_IR_LIST(X) \
@@ -101,6 +104,14 @@ struct IrGraph;
   X(H_UGET,"h_uget") \
   X(H_USET,"h_uset") \
   /* Property acesss without information */ \
+  /* Very suprising is that we *DROP* the high level information for */ \
+  /* whether it is a index (via []) or a property (via "."). That is */ \
+  /* because the language distinguish a list from a map here. Mike Pall */ \
+  /* used to point out that PyPy omits several important information on its */ \
+  /* low level constructs which make AA extreamly hard to progress. In our */ \
+  /* case we do make those information stay. So a high level AA would be a */ \
+  /* pass follow the type inference. We will know that whether the alias existed */ \
+  /* or not. */ \
   X(H_AGET,"h_aget") \
   X(H_ASET,"h_aset") \
   X(H_AGET_INTRINSIC,"h_aget_intrinsic") \
@@ -115,8 +126,7 @@ struct IrGraph;
   /* Iterator */ \
   X(H_ITER_TEST,"h_iter_test") \
   X(H_ITER_NEW ,"h_iter_new") \
-  X(H_ITER_DREF_KEY,"h_iter_dref_key") \
-  X(H_ITER_DREF_VAL,"h_iter_dref_val" ) \
+  X(H_ITER_DREF,"h_iter_dref") \
   /* Function */ \
   X(H_CALL,"h_call") \
   X(H_CALL_INTRINSIC,"h_call_intrinsic")
@@ -145,7 +155,7 @@ enum {
 enum {
   CONSTANT_IR_LIST__START = 0x02ff,
   CONSTANT_IR_LIST(X)
-  CONTANT_IR__END
+  CONSTANT_IR__END
 };
 
 enum {
@@ -211,7 +221,10 @@ struct IrUseBase {
 };
 
 struct IrUse {
-  struct IrUseBase base;
+  struct {
+    struct IrUse* prev;
+    struct IrUse* next;
+  };
   struct IrNode* node;
 };
 
@@ -230,7 +243,10 @@ struct IrUse {
  * forward and backward purpose.
  *
  * For expression that is related to a certain region node. It is represented
- * by its private data structure which *only* used in ControlFlow node */
+ * by its private data structure which *only* used in ControlFlow node .
+ *
+ * Customized data is stored right after the IrNode's memory layout. And the
+ * value will be retrieved based on the Op (label) of the nodes */
 
 struct IrNode {
   uint16_t op;
@@ -262,6 +278,8 @@ struct IrNode {
   struct IrUseBase output_tail;
   int output_size;
   int output_max ;
+
+  /* Your customized data goes right after here */
 };
 
 #define IrNodeHasEffect(IRNODE) ((IRNODE)->effect || (IRNODE)->prop_effect)
@@ -329,7 +347,7 @@ void IrNodeListAddArgument( struct IrGraph* ,
                             struct IrNode*  ,
                             struct IrNode*  );
 
-void IrNodeListAddRegion  ( struct IrGrpah* ,
+void IrNodeListSetRegion  ( struct IrGraph* ,
                             struct IrNode*  ,
                             struct IrNode* );
 
@@ -340,7 +358,7 @@ void IrNodeMapAddArgument( struct IrGraph* ,
                            struct IrNode* key ,
                            struct IrNode* val );
 
-void IrNodeMapAddRegion  ( struct IrGraph* ,
+void IrNodeMapSetRegion  ( struct IrGraph* ,
                            struct IrNode* ,
                            struct IrNode* );
 
@@ -357,11 +375,9 @@ void IrNodeCallAddArg( struct IrGraph* , struct IrNode* call ,
 struct IrNode* IrNodeNewCallIntrinsic( struct IrGraph* , enum IntrinsicFunction func ,
                                                          struct IrNode* region );
 
-enum IntrinsicFunction IrNodeCallIntrinsicGetFunction( struct IrNode* );
-
 static SPARROW_INLINE
 enum IntrinsicFunction IrNodeCallIntrinsicGetFunction( struct IrNode* node ) {
-  assert( node->op == IR_H_CALL_INTRINSIC );
+  SPARROW_ASSERT( node->op == IR_H_CALL_INTRINSIC );
   return *((enum IntrinsicFunction*)(IrNodeGetData(node)));
 }
 
@@ -386,13 +402,7 @@ struct IrNode* IrNodeNewASetIntrinsic( struct IrGraph* , struct IrNode* tos,
 
 static SPARROW_INLINE
 enum IntrinsicAttribute IrNodeAGetIntrinsicGetIntrinsic( struct IrNode* node ) {
-  assert( node->op == IR_H_AGET_INTRINSIC );
-  return *((enum IntrinsicAttribute*)(IrNodeGetData(node)));
-}
-
-static SPARROW_INLINE
-enum IntrinsicAttribute IrNodeAGetIntrinsicGetIntrinsic( struct IrNode* node ) {
-  assert( node->op == IR_H_ASET_INTRINSIC );
+  SPARROW_ASSERT( node->op == IR_H_AGET_INTRINSIC );
   return *((enum IntrinsicAttribute*)(IrNodeGetData(node)));
 }
 
@@ -410,13 +420,25 @@ struct IrNode* IrNodeNewGSet( struct IrGraph* , struct IrNode* name ,
                                                 struct IrNode* value ,
                                                 struct IrNode* region );
 
+static SPARROW_INLINE
+uint32_t IrNodeUGetGetIndex( struct IrNode* node ) {
+  SPARROW_ASSERT( node->op == IR_H_UGET );
+  return *((uint32_t*)(IrNodeGetData(node)));
+}
+
+static SPARROW_INLINE
+uint32_t IrNodeUSetGetIndex( struct IrNode* node ) {
+  SPARROW_ASSERT( node->op == IR_H_USET );
+  return *((uint32_t*)(IrNodeGetData(node)));
+}
+
 /* Control flow node.
  *
  * Each control flow node can have *unbounded* Input node but fixed number of
  * output node. EG: a binary branch will have to force you to add a If node
  * since it is the only node that is able have 2 branches/output */
-
 struct IrNode* IrNodeNewRegion(struct IrGraph*);
+struct IrNode* IrNodeNewMerge (struct IrGraph* , struct IrNode* if_true , struct IrNode* if_false );
 struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* cond, struct IrNode* pred );
 struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
@@ -427,19 +449,17 @@ struct IrNode* IrNodeNewReturn(struct IrGraph* ,
                                struct IrNode* value ,
                                struct IrNode* pred);
 
-size_t IrNodeControlFlowUseCount( struct IrNode* );
-#define IrNodeControlFlowUseEmpty(IRNODE) ((IrNodeControlFlowUseCount(IRNODE)) ==0)
-struct IrNode* IrNodeControFlowIndexUse( struct IrNode* , size_t index );
-void IrNodeControlFlowAddUse ( struct IrGraph*, struct IrNode* , struct IrNode* );
-
 /* Iterator */
 struct IrNode* IrNodeNewIterTest(struct IrGraph*, struct IrNode* value, struct IrNode* region);
 struct IrNode* IrNodeNewIterNew (struct IrGraph*, struct IrNode* value, struct IrNode* region);
-struct IrNode* IrNodeNewIterDrefKey(struct IrGraph* , struct IrNode* , struct IrNode* );
-struct IrNode* IrNodeNewIterDrefVal(struct IrGraph* , struct IrNode* , struct IrNode* );
+struct IrNode* IrNodeNewIterDref(struct IrGraph* , struct IrNode* , struct IrNode* );
 
 /* Misc */
 struct IrNode* IrNodeNewPhi( struct IrGraph* , struct IrNode* left , struct IrNode* right );
+
+struct IrNode* IrNodeNewProjection( struct IrGraph* , struct IrNode* target ,
+                                                      uint32_t index ,
+                                                      struct IrNode* region );
 
 /* IR graph ================================================================
  * IR graph is really just a high level name of a bundle that has lots of
