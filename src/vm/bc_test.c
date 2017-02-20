@@ -52,15 +52,15 @@ static void test_bc_basic() {
       i = 0;
       do {
         uint8_t op = cb.buf[pos];
-        assert(op == i);
+        SPARROW_ASSERT(op == i);
         if(ARG_COUNT[op]) {
-          assert( res[i].operand == CodeBufferDecodeArg(&cb,pos+1) );
-          assert( res[i].line == cb.dbg_arr[i].line );
-          assert( res[i].ccnt == cb.dbg_arr[i].ccnt );
+          SPARROW_ASSERT( res[i].operand == CodeBufferDecodeArg(&cb,pos+1) );
+          SPARROW_ASSERT( res[i].line == cb.dbg_arr[i].line );
+          SPARROW_ASSERT( res[i].ccnt == cb.dbg_arr[i].ccnt );
           pos += 4;
         } else {
-          assert( res[i].line == cb.dbg_arr[i].line );
-          assert( res[i].ccnt == cb.dbg_arr[i].ccnt );
+          SPARROW_ASSERT( res[i].line == cb.dbg_arr[i].line );
+          SPARROW_ASSERT( res[i].ccnt == cb.dbg_arr[i].ccnt );
           pos += 1;
         }
         ++i;

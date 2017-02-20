@@ -4,6 +4,8 @@
 #include "map.h"
 #include "gc.h"
 #include "loader.h"
+#include "debug.h"
+
 #include <sys/time.h>
 #include <limits.h>
 
@@ -91,7 +93,7 @@ void Builtin_Range( struct Runtime* rt , Value* ret , int* fail ) {
       goto fail;
     }
 
-    assert( (iend-istart)/istep > 0);
+    SPARROW_ASSERT( (iend-istart)/istep > 0);
     list = ObjNewList(RTSparrow(rt),(iend-istart)/istep);
 
     for( ; istart < iend ; istart += istep ) {
@@ -121,42 +123,42 @@ void Builtin_Min( struct Runtime* rt , Value* v , int* f ) {
   UNUSE_ARG(rt);
   UNUSE_ARG(v);
   UNUSE_ARG(f);
-  UNIMPLEMENTED();
+  SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Max( struct Runtime* rt , Value* v , int* f ) {
   UNUSE_ARG(rt);
   UNUSE_ARG(v);
   UNUSE_ARG(f);
-  UNIMPLEMENTED();
+  SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Sort(struct Runtime* rt , Value* v , int* f ) {
   UNUSE_ARG(rt);
   UNUSE_ARG(v);
   UNUSE_ARG(f);
-  UNIMPLEMENTED();
+  SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Set( struct Runtime* rt , Value* v , int* f ) {
   UNUSE_ARG(rt);
   UNUSE_ARG(v);
   UNUSE_ARG(f);
-  UNIMPLEMENTED();
+  SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Get( struct Runtime* rt , Value* v , int* f ) {
   UNUSE_ARG(rt);
   UNUSE_ARG(v);
   UNUSE_ARG(f);
-  UNIMPLEMENTED();
+  SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Exist(struct Runtime* rt , Value* v , int* f ){
   UNUSE_ARG(rt);
   UNUSE_ARG(v);
   UNUSE_ARG(f);
-  UNIMPLEMENTED();
+  SPARROW_UNIMPLEMENTED();
 }
 
 /* Builtin objects creation */
@@ -269,7 +271,7 @@ static int list_push( struct Sparrow* sth ,
   struct Runtime* runtime = sth->runtime;
   size_t narg = RuntimeGetArgSize(runtime);
   size_t i;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
 
   if(narg ==0) {
     RuntimeError(runtime,"function push needs at least 1 "
@@ -297,7 +299,7 @@ static int list_extend( struct Sparrow* sth ,
     Value* ret ) {
   struct Runtime* runtime = sth->runtime;
   Value a1,a2;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"extend",2,ARG_LIST,ARG_LIST))
     return -1;
   a1 = RuntimeGetArg(runtime,0);
@@ -313,7 +315,7 @@ static int list_resize( struct Sparrow* sth ,
   struct Runtime* runtime = sth->runtime;
   Value a1,a2;
   size_t size;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
 
   if(RuntimeCheckArg(runtime,"resize",2,ARG_LIST,ARG_CONV_NUMBER))
     return -1;
@@ -335,7 +337,7 @@ static int list_pop( struct Sparrow* sth ,
     Value* ret ) {
   struct Runtime* runtime = sth->runtime;
   Value arg;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
 
   if(RuntimeCheckArg(runtime,"pop",1,ARG_LIST)) return -1;
   arg = RuntimeGetArg(runtime,0);
@@ -349,7 +351,7 @@ static int list_size( struct Sparrow* sth,
     Value* ret ) {
   struct Runtime* runtime = sth->runtime;
   Value arg;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"size",1,ARG_LIST)) return -1;
   arg = RuntimeGetArg(runtime,0);
   Vset_number(ret,ObjListSize(Vget_list(&arg)));
@@ -361,7 +363,7 @@ static int list_empty( struct Sparrow* sth,
     Value* ret ) {
   struct Runtime* runtime = sth->runtime;
   Value arg;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"empty",1,ARG_LIST)) return -1;
   arg = RuntimeGetArg(runtime,0);
   Vset_boolean(ret,ObjListSize(Vget_list(&arg))==0);
@@ -371,7 +373,7 @@ static int list_empty( struct Sparrow* sth,
 static int list_clear( struct Sparrow* sth , Value obj, Value* ret ) {
   struct Runtime* runtime = sth->runtime;
   Value arg;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"clear",1,ARG_LIST)) return -1;
   arg = RuntimeGetArg(runtime,0);
   ObjListClear(Vget_list(&arg));
@@ -386,7 +388,7 @@ static int list_slice( struct Sparrow* sparrow , Value obj , Value* ret ) {
   Value a1, a2, a3;
   size_t start,end;
 
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"slice",3,ARG_LIST,
                                             ARG_CONV_NUMBER,
                                             ARG_CONV_NUMBER))
@@ -435,7 +437,7 @@ struct ObjUdata* GCreateListUdata( struct Sparrow* sparrow ) {
 static int string_size( struct Sparrow* sth , Value obj, Value* ret ) {
   struct Runtime* runtime = sth->runtime;
   Value arg;
-  assert( Vis_udata(&obj) );
+  SPARROW_ASSERT( Vis_udata(&obj) );
   if(RuntimeCheckArg(runtime,"size",1,ARG_STRING)) return -1;
   arg = RuntimeGetArg(runtime,0);
   Vset_number(ret,Vget_str(&arg)->len);
@@ -445,7 +447,7 @@ static int string_size( struct Sparrow* sth , Value obj, Value* ret ) {
 static int string_empty( struct Sparrow* sth , Value obj, Value* ret ) {
   struct Runtime* runtime = sth->runtime;
   Value arg;
-  assert( Vis_udata(&obj) );
+  SPARROW_ASSERT( Vis_udata(&obj) );
   if(RuntimeCheckArg(runtime,"empty",1,ARG_STRING)) return -1;
   arg = RuntimeGetArg(runtime,0);
   Vset_boolean(ret,Vget_str(&arg)->len == 0);
@@ -461,7 +463,7 @@ static int string_slice( struct Sparrow* sth , Value obj , Value* ret ) {
   char sbuf[ LARGE_STRING_SIZE ];
   char* buf = sbuf;
 
-  assert( Vis_udata(&obj) );
+  SPARROW_ASSERT( Vis_udata(&obj) );
   if(RuntimeCheckArg(runtime,"slice",3,ARG_STRING,
                                        ARG_CONV_NUMBER,
                                        ARG_CONV_NUMBER))
@@ -523,7 +525,7 @@ static int map_pop( struct Sparrow* sparrow , Value obj , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
   Value a1,a2;
   struct ObjMap* m;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"pop",2,ARG_MAP,ARG_STRING))
     return -1;
   a1 = RuntimeGetArg(runtime,0);
@@ -539,7 +541,7 @@ static int map_extend( struct Sparrow* sparrow , Value obj , Value* ret ) {
   struct ObjMap* src;
   struct ObjMap* dest;
   struct ObjIterator oitr;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"extend",2,ARG_MAP,ARG_MAP))
     return -1;
   a1 = RuntimeGetArg(runtime,0);
@@ -561,7 +563,7 @@ static int map_extend( struct Sparrow* sparrow , Value obj , Value* ret ) {
 static int map_size( struct Sparrow* sparrow , Value obj , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
   Value a1;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"size",1,ARG_MAP))
     return -1;
   a1 = RuntimeGetArg(runtime,0);
@@ -572,7 +574,7 @@ static int map_size( struct Sparrow* sparrow , Value obj , Value* ret ) {
 static int map_empty( struct Sparrow* sparrow , Value obj , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
   Value a1;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"empty",1,ARG_MAP))
     return -1;
   a1 = RuntimeGetArg(runtime,0);
@@ -585,7 +587,7 @@ static int map_exist( struct Sparrow* sparrow , Value obj , Value* ret ) {
   Value a1,a2;
   struct ObjMap* map;
   struct ObjStr* key;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
 
   if(RuntimeCheckArg(runtime,"exist",2,ARG_MAP,
                                            ARG_STRING))
@@ -603,7 +605,7 @@ static int map_exist( struct Sparrow* sparrow , Value obj , Value* ret ) {
 static int map_clear( struct Sparrow* sparrow , Value obj , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
   Value a1;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"clear",1,ARG_MAP)) return -1;
   a1 = RuntimeGetArg(runtime,0);
   ObjMapClear(Vget_map(&a1));
@@ -763,7 +765,7 @@ static int gc_attr_hook( struct Sparrow* sparrow , struct ObjUdata* udata,
 
 static int gc_force( struct Sparrow* sparrow , Value obj , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"force",0)) return -1;
   GCForce(sparrow);
   Vset_null(ret);
@@ -772,7 +774,7 @@ static int gc_force( struct Sparrow* sparrow , Value obj , Value* ret ) {
 
 static int gc_try( struct Sparrow* sparrow , Value obj , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"try",0)) return -1;
   GCTry(sparrow);
   Vset_null(ret);
@@ -783,7 +785,7 @@ static int gc_stat( struct Sparrow* sparrow , Value obj , Value* ret ) {
   struct Runtime* runtime = sparrow->runtime;
   struct ObjMap* map = ObjNewMap(sparrow,16);
   Value v;
-  assert(Vis_udata(&obj));
+  SPARROW_ASSERT(Vis_udata(&obj));
   if(RuntimeCheckArg(runtime,"stat",0)) return -1;
 #define ADD(X) \
   do { \

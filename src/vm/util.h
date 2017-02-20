@@ -1,6 +1,7 @@
 #ifndef UTIL_H_
 #define UTIL_H_
 #include "../conf.h"
+#include "debug.h"
 
 #include <stdio.h>
 #include <stddef.h>
@@ -32,25 +33,6 @@
 #ifndef UNUSE_ARG
 #define UNUSE_ARG(X) (void)(X)
 #endif /* UNUSE_ARG */
-
-/* Unimplemented macro . When hit , program gonna crash */
-#ifndef NDEBUG
-#define UNIMPLEMENTED() assert(!"Unimplemented!")
-#define verify assert
-#else
-#define UNIMPLEMENTED() \
-  do { \
-    fprintf(stderr,"Crash:%s,%d\nUnimplemented!",__FILE__,__LINE__); \
-    abort(); \
-  } while(0)
-#define verify(X) \
-  do { \
-    if(!(X)) { \
-      fprintf(stderr,"Crash:%s,%d\n"#X,__FILE__,__LINE__); \
-      abort(); \
-    } \
-  } while(0)
-#endif /* NDEBUG */
 
 static SPARROW_INLINE
 size_t NextPowerOf2Size(size_t v) {
@@ -125,7 +107,7 @@ struct CStr {
 static SPARROW_INLINE struct CStr
 CStrDupLen( const char* str , size_t l ) {
   struct CStr res;
-  assert(str);
+  SPARROW_ASSERT(str);
   res.str = strdup(str);
   res.len = l;
   return res;
@@ -225,7 +207,7 @@ StrBufPush( struct StrBuf* sbuf , char c ) {
 static SPARROW_INLINE char
 StrBufPop( struct StrBuf* sbuf ) {
   char ret;
-  assert(sbuf->size >0);
+  SPARROW_ASSERT(sbuf->size >0);
   ret = sbuf->buf[sbuf->size-1];
   --sbuf->size;
   return ret;

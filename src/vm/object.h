@@ -1,9 +1,9 @@
 #ifndef OBJECT_H_
 #define OBJECT_H_
 #include <stddef.h>
-#include <assert.h>
 #include <errno.h>
 #include "../conf.h"
+#include "debug.h"
 #include "util.h"
 #include "bc.h"
 
@@ -514,7 +514,7 @@ void SparrowGCConfig( struct Sparrow* sparrow, size_t threshold ,
 
     if(penalty_ratio) {
       double pr = sparrow->gc_inactive/sparrow->gc_prevsz;
-      assert(pr<=1.0f);
+      SPARROW_ASSERT(pr<=1.0f);
       if(pr <penalty_ratio) {
         sparrow->gc_adjust_threshold =
           (2.0f - pr)*sparrow->gc_adjust_threshold;
@@ -522,7 +522,7 @@ void SparrowGCConfig( struct Sparrow* sparrow, size_t threshold ,
     }
   } else if(penalty_ratio) {
     double pr = sparrow->gc_inactive/sparrow->gc_prevsz;
-    assert(pr<=1.0f);
+    SPARROW_ASSERT(pr<=1.0f);
     if(pr <penalty_ratio) {
       sparrow->gc_adjust_threshold =
         (2.0f - pr)*sparrow->gc_adjust_threshold;
@@ -548,7 +548,7 @@ const char* ValueGetTypeString( Value );
 #define _Vset_type(V,type) ((V)->ipart = (type))
 #define _iptr(PTR) ((intptr_t)(PTR) & VALUE_PTR_MASK)
 #define _gptr(PTR) ((intptr_t)(PTR) & (~VALUE_PTR_MASK))
-#define _check_ptr(PTR) assert( _iptr(PTR) == 0 )
+#define _check_ptr(PTR) SPARROW_ASSERT( _iptr(PTR) == 0 )
 #define _set_gctype(PTR,TYPE) (obj2gc(PTR)->gtype = (TYPE))
 #define _get_gctype(PTR) (obj2gc(PTR)->gtype)
 /* Used to be macro bu causing tons of problem */
@@ -612,23 +612,23 @@ _DEFINE(loop_iterator,LOOP_ITERATOR)
 
 /* getters */
 static SPARROW_INLINE double Vget_number( Value* v ) {
-  assert(Vis_number(v));
+  SPARROW_ASSERT(Vis_number(v));
   return v->num;
 }
 
 static SPARROW_INLINE int Vget_boolean( Value* v ) {
-  assert(Vis_true(v) || Vis_false(v));
+  SPARROW_ASSERT(Vis_true(v) || Vis_false(v));
   return Vis_true(v);
 }
 
 static SPARROW_INLINE struct GCRef* Vget_gcobject( Value* v ) {
-  assert(Vis_gcobject(v));
+  SPARROW_ASSERT(Vis_gcobject(v));
   return (struct GCRef*)(_gptr(v->ptr));
 }
 
 #define _DEFINE(TYPE,NAME,TAG) \
   static SPARROW_INLINE struct TYPE* Vget_##NAME( Value* v ) { \
-    assert(Vis_##NAME(v)); \
+    SPARROW_ASSERT(Vis_##NAME(v)); \
     return gc2obj((struct GCRef*)(_gptr(v->ptr)),struct TYPE); \
   }
 
@@ -789,7 +789,7 @@ int MetaOps_iter ( Value func , struct Sparrow* sparrow ,
   UNUSE_ARG(sparrow);
   UNUSE_ARG(object);
   UNUSE_ARG(iterator);
-  UNIMPLEMENTED();
+  SPARROW_UNIMPLEMENTED();
   return -1;
 }
 

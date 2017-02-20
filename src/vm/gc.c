@@ -73,7 +73,7 @@ void GCFinalizeObj( struct Sparrow* sth, struct GCRef* obj ) {
       free(obj);
       break;
     default:
-      assert(!"unreachable!");
+      SPARROW_ASSERT(!"unreachable!");
       break;
   }
 }
@@ -251,7 +251,7 @@ static void swap( struct Sparrow* sparrow ,
       ref = ref->next;
       ++a;
     } else {
-      assert(ref->gc_state == GC_UNMARKED);
+      SPARROW_ASSERT(ref->gc_state == GC_UNMARKED);
       *prev = ref->next;
       GCFinalizeObj(sparrow,ref);
       ref = *prev;

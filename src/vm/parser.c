@@ -4,9 +4,9 @@
 #include "error.h"
 #include "bc.h"
 #include "util.h"
+#include "debug.h"
 
 #include <stdarg.h>
-#include <assert.h>
 #include <stddef.h>
 #include <math.h>
 
@@ -283,11 +283,11 @@ static void exit_lexscope( struct Parser* p ) {
 
 static struct LexScope* find_loopscp( struct Parser* p ) {
   struct LexScope* scp = cclosure(p)->cur_scp;
-  assert(cclosure(p)->cur_scp->is_loop ||
+  SPARROW_ASSERT(cclosure(p)->cur_scp->is_loop ||
          cclosure(p)->cur_scp->is_in_loop);
   while(!(scp->is_loop)) {
     scp = scp->prev;
-    assert(scp);
+    SPARROW_ASSERT(scp);
   }
   return scp;
 }
@@ -306,7 +306,7 @@ upvar_add(struct PClosure* pc , const struct ObjStr* var ,
   uv.idx = idx;
   DynArrPush(oc,uv,uv);
   DynArrPush(pc,upvar,dupvar);
-  assert( oc->uv_size == pc->upvar_size );
+  SPARROW_ASSERT( oc->uv_size == pc->upvar_size );
   return (int)(oc->uv_size-1);
 }
 
@@ -332,7 +332,7 @@ resolve_upvar( struct Parser* p , const struct ObjStr* str ) {
     if(idx >=0) {
       /* Collapsing upvalue table */
       struct PClosure* c = start->child;
-      assert(c);
+      SPARROW_ASSERT(c);
       idx = upvar_add(c,str,idx,UPVALUE_INDEX_EMBED);
       c = c->child;
       while(c) {
@@ -389,7 +389,7 @@ handle_upvar( struct Parser* p , const struct ObjStr* str ) {
    (EXPR)->tag == EFALSE)
 
 static void expr2num( struct Expr* expr ) {
-  assert(is_convnum(expr));
+  SPARROW_ASSERT(is_convnum(expr));
   switch(expr->tag) {
     case ENUMBER:
       break;
@@ -402,7 +402,7 @@ static void expr2num( struct Expr* expr ) {
       expr->tag = ENUMBER;
       break;
     default:
-      assert(!"unreachable!");
+      SPARROW_ASSERT(!"unreachable!");
       break;
   }
 }
@@ -414,7 +414,7 @@ static int expr_index( struct Parser* p , struct Expr* expr ) {
     case ESTRING:
       return ConstAddString(objclosure(p),expr->str);
     default:
-      assert(!"unreachable!"); return -1;
+      SPARROW_ASSERT(!"unreachable!"); return -1;
   }
 }
 
@@ -442,7 +442,7 @@ static int emit_loadnum( struct Parser* p , double num ) {
       case 3: cbOP(BC_LOADN3); break;
       case 4: cbOP(BC_LOADN4); break;
       case 5: cbOP(BC_LOADN5); break;
-      default: assert(!"unreachable!"); break;
+      default: SPARROW_ASSERT(!"unreachable!"); break;
     }
   }
   return 0;
@@ -519,7 +519,7 @@ static int emit_arithcomp( struct Parser* p ,
     struct Expr* lexpr,
     struct Expr* rexpr,
     enum Token tk ) {
-  assert(is_noneconst(lexpr) || is_noneconst(rexpr));
+  SPARROW_ASSERT(is_noneconst(lexpr) || is_noneconst(rexpr));
   if(is_const(lexpr) || is_const(rexpr)) {
     struct Expr* const_expr;
     const_expr = is_const(lexpr) ? lexpr : rexpr;
@@ -543,11 +543,11 @@ static int emit_arithcomp( struct Parser* p ,
             case TK_GE : _emit(BC_GESV,BC_GEVS); break;
             case TK_EQ : _emit(BC_EQSV,BC_EQVS); break;
             case TK_NE : _emit(BC_NESV,BC_NEVS); break;
-            default: assert(!"unreachable!"); break;
+            default: SPARROW_ASSERT(!"unreachable!"); break;
           }
         }
       } else {
-        assert(is_convnum(const_expr));
+        SPARROW_ASSERT(is_convnum(const_expr));
         expr2num(const_expr);
         idx = expr_index(p,const_expr);
         if(idx<0) {
@@ -567,7 +567,7 @@ static int emit_arithcomp( struct Parser* p ,
           case TK_GT : _emit(BC_GTNV,BC_GTVN); break;
           case TK_EQ : _emit(BC_EQNV,BC_EQVN); break;
           case TK_NE : _emit(BC_NENV,BC_NEVN); break;
-          default: assert(!"unreachable!"); break;
+          default: SPARROW_ASSERT(!"unreachable!"); break;
         }
       }
     } else {
@@ -607,7 +607,7 @@ static int emit_arithcomp( struct Parser* p ,
       case TK_GT : cbOP(BC_GTVV) ; break;
       case TK_EQ : cbOP(BC_EQVV) ; break;
       case TK_NE : cbOP(BC_NEVV) ; break;
-      default: assert(!"unreachable!"); break;
+      default: SPARROW_ASSERT(!"unreachable!"); break;
     }
   }
   lexpr->tag = EEXPR;
@@ -631,7 +631,7 @@ _tryfold_unary( struct Parser* p , enum Token tk , struct Expr* expr ) {
         expr->u.num = -1;
       } else if(tk == TK_NOT) {
         expr->tag = EFALSE;
-      } else assert(!"unreachable!");
+      } else SPARROW_ASSERT(!"unreachable!");
       return 0;
     case EFALSE:
       if(tk == TK_SUB) {
@@ -639,14 +639,14 @@ _tryfold_unary( struct Parser* p , enum Token tk , struct Expr* expr ) {
         expr->u.num = 0;
       } else if(tk == TK_NOT) {
         expr->tag = ETRUE;
-      } else assert (0);
+      } else SPARROW_UNREACHABLE();
       return 0;
     case ENUMBER:
       if(tk == TK_SUB) {
         expr->u.num = -(expr->u.num);
       } else if(tk == TK_NOT) {
         expr->tag = (expr->u.num ? EFALSE : ETRUE);
-      } else assert(!"unreachable!");
+      } else SPARROW_ASSERT(!"unreachable!");
       return 0;
     case ENULL:
       if(tk == TK_SUB) {
@@ -654,7 +654,7 @@ _tryfold_unary( struct Parser* p , enum Token tk , struct Expr* expr ) {
         return -1;
       } else if(tk == TK_NOT) {
         expr->tag = ETRUE;
-      } else assert(!"unreachable!");
+      } else SPARROW_ASSERT(!"unreachable!");
       return 0;
     case ESTRING:
       if(tk == TK_SUB) {
@@ -662,10 +662,10 @@ _tryfold_unary( struct Parser* p , enum Token tk , struct Expr* expr ) {
         return -1;
       } else if(tk == TK_NOT) {
         expr->tag = EFALSE;
-      } else assert(!"unreachable!");
+      } else SPARROW_ASSERT(!"unreachable!");
       return 0;
     default:
-      assert(!"unreachable!"); return -1;
+      SPARROW_ASSERT(!"unreachable!"); return -1;
   }
 }
 
@@ -740,7 +740,7 @@ tryfold_arithcomp( struct Parser* p ,
         l->tag = (lnum !=rnum ? ETRUE : EFALSE);
         break;
       default:
-        assert(!"unreachable!"); break;
+        SPARROW_ASSERT(!"unreachable!"); break;
     }
     return FOLD;
   } else {
@@ -771,7 +771,7 @@ tryfold_arithcomp( struct Parser* p ,
             l->tag = ((ObjStrEqual(l->str,r->str))? ETRUE:EFALSE);
             break;
           default:
-            assert(!"unreachable!"); break;
+            SPARROW_ASSERT(!"unreachable!"); break;
         }
         return FOLD;
       } else {
@@ -792,7 +792,7 @@ tryfold_arithcomp( struct Parser* p ,
       return PERROR;
     }
   }
-  assert( is_noneconst(l) || is_noneconst(r) );
+  SPARROW_ASSERT( is_noneconst(l) || is_noneconst(r) );
   return UNFOLD;
 }
 
@@ -864,7 +864,7 @@ static int pexpr_unary( struct Parser* p ,struct Expr* expr) {
     switch(oparr[i]) {
       case TK_SUB: cbOP(BC_NEG); break;
       case TK_NOT: cbOP(BC_NOT); break;
-      default: assert(!"unreachable!"); break;
+      default: SPARROW_ASSERT(!"unreachable!"); break;
     }
   }
   return 0;
@@ -988,11 +988,11 @@ static int pexpr_logic( struct Parser* p , const int (*tftab)[3],
     switch(result) {
       case LOGIC_TRUE:
         if(is_nonebooleantype(expr)) {
-          assert(is_booleantype(&rexpr));
+          SPARROW_ASSERT(is_booleantype(&rexpr));
           CodeBufferSetToLabel(codebuf(p),expr->cpos);
         }
         if(is_nonebooleantype(&rexpr)) {
-          assert(is_booleantype(expr));
+          SPARROW_ASSERT(is_booleantype(expr));
           CodeBufferSetToLabel(codebuf(p),rexpr.cpos);
         }
         expr->tag = ETRUE;
@@ -1000,11 +1000,11 @@ static int pexpr_logic( struct Parser* p , const int (*tftab)[3],
         break;
       case LOGIC_FALSE:
         if(is_nonebooleantype(expr)) {
-          assert(is_booleantype(&rexpr));
+          SPARROW_ASSERT(is_booleantype(&rexpr));
           CodeBufferSetToLabel(codebuf(p),expr->cpos);
         }
         if(is_nonebooleantype(&rexpr)) {
-          assert(is_booleantype(expr));
+          SPARROW_ASSERT(is_booleantype(expr));
           CodeBufferSetToLabel(codebuf(p),expr->cpos);
         }
         expr->tag = EFALSE;
@@ -1069,7 +1069,7 @@ static int pexpr_logicor( struct Parser* p , struct Expr* expr ) {
    LexerToken(&((P)->lex)) == TK_LPAR)
 
 static int pexpr_funccall( struct Parser* p , struct Expr* expr ) {
-  assert( LexerToken(&(p->lex)) == TK_LPAR );
+  SPARROW_ASSERT( LexerToken(&(p->lex)) == TK_LPAR );
   expr->tag = EFUNCCALL;
   NEXT();
   if(LexerToken(&(p->lex)) == TK_RPAR) { /* empty funccall */
@@ -1138,7 +1138,7 @@ static int _pexpr_pfixcomp( struct Parser* p , struct Expr* expr ) {
     case TK_LPAR:
       return pexpr_funccall(p,expr);
     default:
-      assert(!"unreachable!"); return -1;
+      SPARROW_ASSERT(!"unreachable!"); return -1;
   }
 }
 
@@ -1191,7 +1191,7 @@ static int pexpr_rpfix( struct Parser* p , struct Expr* expr ) {
 
 static int
 pexpr_list( struct Parser* p , struct Expr* expr ) {
-  assert(LexerToken(&(p->lex)) == TK_LSQR);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_LSQR);
   NEXT();
   if(LexerToken(&(p->lex)) == TK_RSQR) {
     NEXT();
@@ -1210,7 +1210,7 @@ pexpr_list( struct Parser* p , struct Expr* expr ) {
       ++ecnt;
     } while(1);
     switch(ecnt) {
-      case 0: assert(!"unreachable!"); break;
+      case 0: SPARROW_ASSERT(!"unreachable!"); break;
       case 1: cbOP(BC_NEWL1); break;
       case 2: cbOP(BC_NEWL2); break;
       case 3: cbOP(BC_NEWL3); break;
@@ -1241,7 +1241,7 @@ is_map_key( struct Parser* p , struct Expr* expr ) {
 
 static int
 pexpr_map( struct Parser* p , struct Expr* expr ) {
-  assert(LexerToken(&(p->lex)) == TK_LBRA);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_LBRA);
   NEXT();
   if(LexerToken(&(p->lex)) == TK_RBRA) {
     NEXT();
@@ -1264,7 +1264,7 @@ pexpr_map( struct Parser* p , struct Expr* expr ) {
       ++ecnt;
     } while(1);
     switch(ecnt) {
-      case 0: assert(!"unreachable!"); break;
+      case 0: SPARROW_ASSERT(!"unreachable!"); break;
       case 1: cbOP(BC_NEWM1); break;
       case 2: cbOP(BC_NEWM2); break;
       case 3: cbOP(BC_NEWM3); break;
@@ -1285,7 +1285,7 @@ pexpr_map( struct Parser* p , struct Expr* expr ) {
 static int
 pexpr_intrinsic( struct Parser* p , struct Expr* expr ) {
   enum Bytecode bc = IFuncGetBytecode(expr->str->str);
-  assert(LexerToken(&(p->lex)) == TK_LPAR);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_LPAR);
   if(bc == BC_NOP) return 1; /* Not a intrinsic function */
   else {
     int narg = 0;
@@ -1394,7 +1394,7 @@ struct IfBranch {
 static int _parse_branch( struct Parser* p , enum Token tk ,
     struct IfBranch* br ) {
   struct Expr cond;
-  assert(LexerToken(&(p->lex)) == tk);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == tk);
   TRY(TK_LPAR); NEXT(); /* skip ( */
   /* Patch the previous branch to *this* jump if we have */
   if(tk == TK_ELIF)
@@ -1432,7 +1432,7 @@ static int parse_if( struct Parser* p ) {
   size_t jo_sz = 0;
   size_t i;
 
-  assert( LexerToken(&(p->lex)) == TK_IF );
+  SPARROW_ASSERT( LexerToken(&(p->lex)) == TK_IF );
   if(_parse_branch(p,TK_IF,&br)) return -1;
   if(LexerToken(&(p->lex)) == TK_ELIF ||
      LexerToken(&(p->lex)) == TK_ELSE)
@@ -1470,7 +1470,7 @@ static void _close_forjump( struct Parser* p ,
   struct LexScope* scp = cclosure(p)->cur_scp;
   size_t i;
   int brk_jmp;
-  assert(scp->is_loop); /* Must be a loop */
+  SPARROW_ASSERT(scp->is_loop); /* Must be a loop */
   /* break. All the break will jump to a position
    * which pop variables inside of loop body since
    * we jump out of the body */
@@ -1485,7 +1485,7 @@ static void _close_forjump( struct Parser* p ,
 }
 
 static int parse_for( struct Parser* p ) {
-  assert( LexerToken(&(p->lex)) == TK_FOR );
+  SPARROW_ASSERT( LexerToken(&(p->lex)) == TK_FOR );
   TRY(TK_LPAR); NEXT(); /* Skip ( */
   if(LexerToken(&(p->lex)) == TK_VARIABLE) {
     struct LexScope scp; /* Iterator bounded scope */
@@ -1558,10 +1558,10 @@ static int parse_for( struct Parser* p ) {
 
 /* Loop related control structure */
 static int parse_continue( struct Parser* p ) {
-  assert(LexerToken(&(p->lex)) == TK_CONTINUE);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_CONTINUE);
   if(is_inloop(p)) {
     struct LexScope* lscp = find_loopscp(p);
-    assert(lscp->is_loop);
+    SPARROW_ASSERT(lscp->is_loop);
     if(lscp->cjmp_sz == CONT_STMT_MAX) {
       perr(PERR_TOO_MANY_CONTINUE);
       return -1;
@@ -1578,10 +1578,10 @@ static int parse_continue( struct Parser* p ) {
 }
 
 static int parse_break( struct Parser* p ) {
-  assert(LexerToken(&(p->lex)) == TK_BREAK);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_BREAK);
   if(is_inloop(p)) {
     struct LexScope* lscp = find_loopscp(p);
-    assert(lscp->is_loop);
+    SPARROW_ASSERT(lscp->is_loop);
     if(lscp->bjmp_sz == BRK_STMT_MAX) {
       perr(PERR_TOO_MANY_BREAK);
       return -1;
@@ -1611,7 +1611,7 @@ static int _parse_closureproto( struct Parser* p ,
   size_t i;
   struct StrBuf sbuf;
 
-  assert(LexerToken(&(p->lex)) == TK_LPAR); NEXT(); /* Skip ( */
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_LPAR); NEXT(); /* Skip ( */
   if(LexerToken(&(p->lex)) == TK_RPAR) {
     NEXT();
     objc->narg = 0;
@@ -1677,7 +1677,7 @@ static int parse_closure( struct Parser* p ) {
   struct PClosure pclosure;
   struct LexScope lscope;
   int idx = objc->cls_idx;
-  assert(LexerToken(&(p->lex)) == TK_FUNCTION);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_FUNCTION);
   objc->start = LexerPosition(&(p->lex));
 
   NEXT(); /* skip function */
@@ -1708,7 +1708,7 @@ static int parse_closure( struct Parser* p ) {
   exit_lexscope(p);
 
   /* exit the current closure scope */
-  assert(cclosure(p)->cur_scp == NULL);
+  SPARROW_ASSERT(cclosure(p)->cur_scp == NULL);
   p->closure = pclosure.prev;
 
   /* load closure on to stack */
@@ -1726,7 +1726,7 @@ fail:
 }
 
 static int parse_return( struct Parser* p ) {
-  assert(LexerToken(&(p->lex)) == TK_RETURN);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_RETURN);
   NEXT(); /* Skip return */
   if(LexerToken(&(p->lex)) == TK_SEMICOLON) {
     cbOP(BC_RETNULL);
@@ -1755,7 +1755,7 @@ static int parse_return( struct Parser* p ) {
               case 0: cbOP(BC_RETN0); break;
               case 1: cbOP(BC_RETN1); break;
               case -1:cbOP(BC_RETNN1);break;
-              default: assert(!"unreachable!"); break;
+              default: SPARROW_ASSERT(!"unreachable!"); break;
             }
           }
         }
@@ -1780,7 +1780,7 @@ static int parse_return( struct Parser* p ) {
 }
 
 static int parse_decl( struct Parser* p ) {
-  assert(LexerToken(&(p->lex)) == TK_VAR);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_VAR);
   NEXT();
   if(LexerToken(&(p->lex)) != TK_VARIABLE) {
     perr(PERR_DECL_VARIABLE);
@@ -1816,7 +1816,7 @@ static int parse_decl( struct Parser* p ) {
 /* parsing assignment for function call */
 static int parse_assignorfunccall( struct Parser* p ) {
   struct Expr rexpr,lexpr;
-  assert(LexerToken(&(p->lex)) == TK_VARIABLE);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_VARIABLE);
   lexpr.str = StrBufToObjStrNoGC(p->sparrow,LexerLexemeStr(&(p->lex)));
   NEXT(); /* Skip VAR */
   if(is_pfix_tk(p)) {
@@ -1924,7 +1924,7 @@ static int parse_assignorfunccall( struct Parser* p ) {
                 case -3:cbA(BC_MOVENN3,idx); break;
                 case -4:cbA(BC_MOVENN4,idx); break;
                 case -5:cbA(BC_MOVENN5,idx); break;
-                default: assert(!"unreachable!"); break;
+                default: SPARROW_ASSERT(!"unreachable!"); break;
               }
             }
           }
@@ -1977,7 +1977,7 @@ static int parse_stmt( struct Parser* p ) {
 static int parse_chunk( struct Parser* p , int newscope ) {
   struct LexScope scp;
   if(newscope) enter_lexscope(p,&scp,0);
-  assert(LexerToken(&(p->lex)) == TK_LBRA);
+  SPARROW_ASSERT(LexerToken(&(p->lex)) == TK_LBRA);
   NEXT();
   if(LexerToken(&(p->lex)) == TK_RBRA) goto done;
 

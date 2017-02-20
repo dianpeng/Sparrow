@@ -224,7 +224,7 @@ struct ObjModule* ObjNewModuleNoGC( struct Sparrow* sth ,
     const char* fpath , const char* source ) {
   /* add a module */
   struct ObjModule* mod;
-  assert( ObjFindModule(sth,fpath) == NULL );
+  SPARROW_ASSERT( ObjFindModule(sth,fpath) == NULL );
   mod =  malloc(sizeof(*mod));
   mod->cls_arr = NULL;
   mod->cls_cap = mod->cls_size = 0;
@@ -516,7 +516,6 @@ udata_print:
         litr->step,
         litr->loop);
   } else {
-    assert(!"unreachable!");
   }
 }
 
@@ -526,8 +525,8 @@ static int ifunc_wrapper( struct Sparrow* sparrow ,
     struct ObjUdata* udata , Value* ret ) {
   IntrinsicCall func = (IntrinsicCall)(udata->udata);
   int fail;
-  assert(func);
-  assert(sparrow->runtime);
+  SPARROW_ASSERT(func);
+  SPARROW_ASSERT(sparrow->runtime);
 
   func(sparrow->runtime,ret,&fail);
   if( fail ) {
@@ -589,21 +588,23 @@ static void global_env_init( struct Sparrow* sparrow ,
 /* only used here for SparrowDestroy */
 void SparrowDestroy( struct Sparrow* sth ) {
   struct GCRef* start , *temp;
+#ifdef SPARROW_DEBUG
   size_t i;
-#ifndef NDEBUG
   i = 0;
-#endif
+#endif /* SPARROW_DEBUG */
 
   start = sth->gc_start;
   while( start ) {
     temp = start->next;
     GCFinalizeObj(sth,start);
     start = temp;
-#ifndef NDEBUG
+
+#ifdef SPARROW_DEBUG
     ++i;
-#endif /* NDEBUG */
+#endif /* SPARROW_DEBUG */
+
   }
-  assert( i == sth->gc_sz );
+  SPARROW_ASSERT( i == sth->gc_sz );
   free(sth->str_arr);
   sth->str_arr = NULL;
   sth->str_size = sth->str_cap = 0;
@@ -666,7 +667,7 @@ struct ObjStr* IAttrGetObjStr( struct Sparrow* sparrow,
     INTRINSIC_ATTRIBUTE(__)
 
     default:
-      assert(!"unreachable!");
+      SPARROW_ASSERT(!"unreachable!");
       return NULL;
   }
 
@@ -729,7 +730,7 @@ static void objstr_insert( struct Sparrow* sth ,
     int h = str->hash;
     if(!hint) {
       while((*slot)->more) {
-        assert(!string_equal(*slot,str->hash,str->str,str->len));
+        SPARROW_ASSERT(!string_equal(*slot,str->hash,str->str,str->len));
         slot = sth->str_arr + (*slot)->next;
       }
       hint = *slot;
@@ -823,7 +824,7 @@ str_iter_deref( struct Sparrow* sth ,
     Value* key,
     Value* val ) {
   struct ObjStr* str = Vget_str(&(itr->obj));
-  assert(itr->u.index < str->len);
+  SPARROW_ASSERT(itr->u.index < str->len);
   if(key) Vset_number(key,itr->u.index);
   if(val) Vset_str(val,ObjNewStrFromChar(sth,str->str[itr->u.index]));
 }
@@ -877,7 +878,7 @@ const char* ValueGetTypeString( Value v ) {
   } else if(Vis_loop_iterator(&v)) {
     return "loop_iterator";
   } else {
-    assert(!"unreachable!");
+    SPARROW_ASSERT(!"unreachable!");
     return NULL;
   }
 }
@@ -949,7 +950,7 @@ struct ObjStr* ValueToString( struct Runtime* rt , Value obj ,
       goto fail;
     } else {
       len = NumPrintF(num,buf,256);
-      assert(len > 0);
+      SPARROW_ASSERT(len > 0);
       ret = ObjNewStr(RTSparrow(rt),buf,len);
     }
   }

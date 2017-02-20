@@ -62,7 +62,6 @@
 #define PERR_HOOKED_METAOPS_ERROR "type %s's user defined meta operation %s failed!"
 #define PERR_METAOPS_ERROR  "type %s doesn't support or not define meta operation %s!"
 
-#ifndef SPARROW_DEBUG
 void ReportErrorV( struct StrBuf* , const char* ,
     size_t , size_t , const char* , va_list );
 
@@ -73,21 +72,5 @@ void ReportError( struct StrBuf* buf , const char* spath,
   va_start(vl,fmt);
   ReportErrorV(buf,spath,line,ccnt,fmt,vl);
 }
-# else
-
-void ReportErrorV( struct StrBuf* , const char* ,
-    size_t , size_t , const char* , int ,
-    const char* , va_list );
-
-static SPARROW_INLINE
-void ReportError( struct StrBuf* buf , const char* spath,
-    size_t line , size_t ccnt ,
-    const char* file , int l ,
-    const char* fmt , ... ) {
-  va_list vl;
-  va_start(vl,fmt);
-  ReportErrorV(buf,spath,line,ccnt,file,l,fmt,vl);
-}
-#endif /* SPARROW_DEBUG */
 
 #endif /* ERROR_H_ */

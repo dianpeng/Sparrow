@@ -718,6 +718,8 @@ static int build_list( struct Sparrow* sparrow ,
                        builder->region);
   }
 
+  IrNodeListAddRegion(builder->graph,list,builder->region);
+
   ss_pop(&(builder->stack),size);
   ss_push(&(builder->stack),list);
   return 0;
@@ -758,6 +760,8 @@ static int build_map( struct Sparrow* sparrow ,
                       ss_top(&(builder->stack),i),
                       builder->region);
   }
+
+  IrNodeMapAddRegion(builder->graph,map,builder->region);
 
   ss_pop(&(builder->stack),size*2);
   ss_push(&(builder->stack),map);

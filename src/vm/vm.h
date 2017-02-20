@@ -2,6 +2,7 @@
 #define VM_H_
 #include "object.h"
 #include "bc.h"
+#include "debug.h"
 #include "util.h"
 
 /* Currently we don't support multiple threads */
@@ -54,7 +55,7 @@ Value RuntimeGetArg( struct Runtime* rt , size_t narg ) {
   struct CallThread* thread = rt->cur_thread;
   struct CallFrame* frame =  thread->frame + thread->frame_size -1;
   size_t arg_idx;
-  assert( narg < frame->narg );
+  SPARROW_ASSERT( narg < frame->narg );
   arg_idx = frame->base_ptr + narg;
   return thread->stack[arg_idx];
 }

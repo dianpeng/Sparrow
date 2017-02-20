@@ -47,7 +47,7 @@ ObjListPop ( struct ObjList* list ) {
 
 static SPARROW_INLINE Value
 ObjListIndex( struct ObjList* list , size_t idx ) {
-  assert(list->size > idx);
+  SPARROW_ASSERT(list->size > idx);
   return list->arr[idx];
 }
 

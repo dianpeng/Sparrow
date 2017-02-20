@@ -15,15 +15,15 @@
   ((THREAD)->stack[(THREAD)->stack_size-1] = (VALUE))
 #define global_env(RT) ((RTSparrow(RT)->global_env))
 
-#ifndef NDEBUG
+#ifdef SPARROW_DEBUG
 static SPARROW_INLINE
 void pop( struct CallThread* frame , size_t narg ) {
-  assert(frame->stack_size >= narg );
+  SPARROW_ASSERT(frame->stack_size >= narg );
   frame->stack_size -= narg;
 }
 #else
 #define pop(THREAD,NARG) do { ((THREAD)->stack_size-=(NARG)); } while(0)
-#endif /* NDEBUG */
+#endif /* SPARROW_DEBUG */
 
 /* Used to indicate that the current function is *called* via a C function
  * so once the interpreter finish *current frame*, it should return to the
@@ -89,7 +89,7 @@ int check_arg_type( struct Runtime* rt, Value val , enum ArgType type ,
     case ARG_BOOLEAN: CHECK(Vis_boolean(&val));
     case ARG_CONV_BOOLEAN: return 0;
     case ARG_GCOBJECT: CHECK(Vis_gcobject(&val));
-    default: assert(!"unreachable!"); return -1;
+    default: SPARROW_ASSERT(!"unreachable!"); return -1;
   }
 
 #undef CHECK /* CHECK */
@@ -152,7 +152,7 @@ static void do_stackunwind( struct Runtime* rt , struct StrBuf* buffer ) {
             frame->pc,
             frame->narg);
       } else {
-        assert(!"unreachable!"); /* We should never reach here */
+        SPARROW_ASSERT(!"unreachable!"); /* We should never reach here */
       }
     }
   }
@@ -984,15 +984,15 @@ void vm_aseti( struct Runtime* rt, Value object , Value value ,
 static SPARROW_INLINE
 Value vm_uget( struct Runtime* rt , int index ) {
   struct ObjClosure* closure = current_frame(RTCallThread(rt))->closure;
-  assert(closure);
-  assert(index < closure->proto->uv_size);
+  SPARROW_ASSERT(closure);
+  SPARROW_ASSERT(index < closure->proto->uv_size);
   return closure->upval[index];
 }
 
 static SPARROW_INLINE
 void vm_uset( struct Runtime* rt , int index , Value val ) {
   struct ObjClosure* closure = current_frame(RTCallThread(rt))->closure;
-  assert(index < closure->proto->uv_size);
+  SPARROW_ASSERT(index < closure->proto->uv_size);
   closure->upval[index] = val;
 }
 
@@ -1034,7 +1034,7 @@ int add_callframe( struct Runtime* rt ,int argnum ,
 static SPARROW_INLINE
 int del_callframe( struct Runtime* rt ) {
   struct CallThread* thread = RTCallThread(rt);
-  assert(thread->frame_size >0);
+  SPARROW_ASSERT(thread->frame_size >0);
   /* restore the previous stack_size via base_ptr */
   thread->stack_size = RTCurFrame(rt)->base_ptr;
   --thread->frame_size;
@@ -1220,7 +1220,7 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
 #define DISPATCH() \
   do { \
     op = proto->code_buf.buf[frame->pc++]; \
-    verify(op >=0 && op < SIZE_OF_BYTECODE); \
+    SPARROW_VERIFY(op >=0 && op < SIZE_OF_BYTECODE); \
     goto *jump_table[op]; \
   } while(0)
 #endif /* SPARROW_VM_INSTRUCTION_CHECK */
@@ -2547,8 +2547,8 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
         new_cls->upval[i] = thread->stack[frame->base_ptr+
           new_proto->uv_arr[i].idx];
       } else {
-        assert(closure);
-        assert(new_proto->uv_arr[i].idx < proto->uv_size);
+        SPARROW_ASSERT(closure);
+        SPARROW_ASSERT(new_proto->uv_arr[i].idx < proto->uv_size);
         new_cls->upval[i] = closure->upval[ new_proto->uv_arr[i].idx ];
       }
     }
@@ -2776,19 +2776,19 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
 
   /* Misc Labels not in used right now */
   CASE(BC_LOOP) {
-    UNIMPLEMENTED();
+    SPARROW_UNIMPLEMENTED();
   }
 
   CASE(BC_CLOSURE) {
-    UNIMPLEMENTED();
+    SPARROW_UNIMPLEMENTED();
   }
 
   CASE(BC_OP) {
-    UNIMPLEMENTED();
+    SPARROW_UNIMPLEMENTED();
   }
 
   CASE(BC_A) {
-    UNIMPLEMENTED();
+    SPARROW_UNIMPLEMENTED();
   }
 
   CASE(BC_NOP) {
@@ -2798,9 +2798,9 @@ static int vm_main( struct Runtime* rt , Value* ret ) {
 #ifdef SPARROW_VM_NO_THREADING
   default:
 #ifdef SPARROW_VM_INSTRUCTION_CHECK
-    verify(!"Unknown instruction!");
+    SPARROW_VERIFY(!"Unknown instruction!");
 #else
-    assert(!"Unknown instruction!");
+    SPARROW_ASSERT(!"Unknown instruction!");
 #endif /* SPARROW_VM_INSTRUCTION_CHECK */
     } /* switch */
   }   /* while */
@@ -2860,7 +2860,7 @@ static void runtime_init( struct Sparrow* sparrow , struct Runtime* runtime ,
 static void runtime_destroy( struct Sparrow* sp,
     struct Runtime* runtime ) {
   size_t i;
-  assert( runtime == sp->runtime );
+  SPARROW_ASSERT( runtime == sp->runtime );
   sp->runtime = sp->runtime->prev;
   for( i = 0 ; i < SIZE_OF_THREADS ; ++i ) {
     free(runtime->ths[i].frame);
@@ -2912,9 +2912,9 @@ int CallFunc( struct Sparrow* sparrow , Value func ,
   struct CallFrame* frame = RTCurFrame(runtime);
   int rstat;
 
-  assert(runtime);
-  assert(frame->closure);
-  assert(argnum >= 0);
+  SPARROW_ASSERT(runtime);
+  SPARROW_ASSERT(frame->closure);
+  SPARROW_ASSERT(argnum >= 0);
 
   rstat = vm_call( runtime , func , argnum , ret );
 
@@ -2924,10 +2924,10 @@ int CallFunc( struct Sparrow* sparrow , Value func ,
     case CALLERROR:
       return -1;
     default:
-      assert(frame->base_ptr == 0);
+      SPARROW_ASSERT(frame->base_ptr == 0);
       frame->base_ptr = RETURN_TO_HOST;
       rstat = vm_main(runtime,ret);
-      assert(frame->base_ptr == RETURN_TO_HOST);
+      SPARROW_ASSERT(frame->base_ptr == RETURN_TO_HOST);
       frame->base_ptr = 0;
       return rstat;
   }

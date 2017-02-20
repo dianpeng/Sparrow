@@ -35,7 +35,7 @@ static struct ObjMapEntry* find_entry( struct ObjMap* map ,
       if( opt == DO_INSERT )
         return entry;
     } else if(ObjStrEqual(entry->key,key)) {
-      assert(entry->used);
+      SPARROW_ASSERT(entry->used);
       return entry;
     }
 
@@ -50,7 +50,7 @@ static struct ObjMapEntry* find_entry( struct ObjMap* map ,
     do
       entry = map->entry+ (++h & (map->cap-1));
     while( entry->used );
-    assert(!entry->del);
+    SPARROW_ASSERT(!entry->del);
     prev->next = (entry-map->entry);
     prev->more = 1;
     entry->fhash = fhash;
@@ -88,7 +88,7 @@ static void insert( struct ObjMap* map , struct ObjStr* key , Value val ) {
       key,
       DO_INSERT);
 
-  assert(entry);
+  SPARROW_ASSERT(entry);
   entry->key = key;
   entry->value = val;
   entry->del = 0;
@@ -192,8 +192,8 @@ static void map_iter_deref( struct Sparrow* sth ,
   struct ObjMap* m;
   UNUSE_ARG(sth);
   m = Vget_map(&(itr->obj));
-  assert((size_t)(itr->u.index) < m->cap);
-  assert(m->entry[itr->u.index].used && !m->entry[itr->u.index].del);
+  SPARROW_ASSERT((size_t)(itr->u.index) < m->cap);
+  SPARROW_ASSERT(m->entry[itr->u.index].used && !m->entry[itr->u.index].del);
   if(key) Vset_str(key,m->entry[itr->u.index].key);
   if(value) *value = m->entry[itr->u.index].value;
 }

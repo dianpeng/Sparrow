@@ -77,6 +77,7 @@ struct IrGraph;
 #define PRIMITIVE_IR_LIST(X) \
   X(PRIMITIVE_LIST,"primitive_list") \
   X(PRIMITIVE_MAP,"primitive_map") \
+  X(PRIMITIVE_PAIR,"primitive_pair") \
   X(PRIMITIVE_CLOSURE,"primitive_closure")
 
 /* High level IR , the IR is mostly a one-2-one mapping of the bytecode and with
@@ -193,16 +194,24 @@ static SPARROW_INLINE int IrIsPrimitive(int opcode) {
   return IrGetKindCode(opcode) == IRKIND_PRIMITIVE;
 }
 
-static SPARROW_INLINE int IrIsHighIR(int opcode) {
+static SPARROW_INLINE int IrIsHighIr(int opcode) {
   return IrGetKindCode(opcode) == IRKIND_HIGH_IROP;
 }
+
+int IrNumberGetType(double number);
 
 /* IrUse. A use structure represents the def-use/use-def chain element. Since
  * the chain will be modified during IrGraph construction. We use a double
  * linked list here to ease the pain for removing a certain use from the IR */
-struct IrUse {
+struct IrUse;
+
+struct IrUseBase {
   struct IrUse* prev;
   struct IrUse* next;
+};
+
+struct IrUse {
+  struct IrUseBase base;
   struct IrNode* node;
 };
 
@@ -225,8 +234,6 @@ struct IrUse {
 
 struct IrNode {
   uint16_t op;
-  uint16_t immutable : 1;    /* Whether this node is immutable or not */
-
   uint16_t effect : 1;       /* This is a coarsed side effect analyzing while
                               * the bytecode is translated into the IrGraph.
                               * This will impact whether the node will be added
@@ -247,26 +254,30 @@ struct IrNode {
    * allocator inside of the IrGrpah */
 
   /* Input chain or use def chain */
-  struct IrUse input_tail;
-  uint32_t input_size;
-  uint32_t input_max ;
+  struct IrUseBase input_tail;
+  int input_size;
+  int input_max;
 
   /* Output chain or def use chain */
-  struct IrUse output_tail;
-  uint32_t output_size;
-  uint32_t output_max ;
+  struct IrUseBase output_tail;
+  int output_size;
+  int output_max ;
 };
+
+#define IrNodeHasEffect(IRNODE) ((IRNODE)->effect || (IRNODE)->prop_effect)
+
+#define IrNodeGetData(IRNODE) (((char*)(IRNODE))+sizeof(*IRNODE))
 
 /* Low level add input/output function. It won't take care of effect bit settings */
 
 /* The input and output chain
  *
- * The output chain is mostly used and preferred to demontstrate how control
- * flows. We end up with a forward graph. However the input chain is also used
- * only in situation that a backedge is added to the graph.
- *
- * For none control flow node. The input is used to represent its operand. The
- * output is not used */
+ * 1) For control flow node , the output chain is used to represent the node's
+ * control flow ; the input chain is used to represent the statement that is
+ * related to this control flow node.
+ * 2) For none control flow node , the output node defines the def-use chains;
+ * and the input node defines the use-def chains.
+ */
 
 void IrNodeAddInput (struct IrGraph* , struct IrNode* node , struct IrNode* input_node );
 void IrNodeAddOutput(struct IrGraph* , struct IrNode* node , struct IrNode* output_node);
@@ -280,15 +291,15 @@ struct IrUse* IrNodeRemoveOutput(struct IrNode*,struct IrUse*);
 void IrNodeClearInput(struct IrNode*);
 void IrNodeClearOutput(struct IrNode*);
 
-#define IrNodeGetInputSize(IRNODE) ((IRNODE)->input_size)
+#define IrNodeGetInputSize(IRNODE)  ((IRNODE)->input_size)
 #define IrNodeGetOutputSize(IRNODE) ((IRNODE)->output_size)
-#define IrNodeGetInputMax(IRNODE) ((IRNODE)->input_max)
-#define IrNodeGetOutputMax(IRNODE) ((IRNODE)->output_max)
+#define IrNodeGetInputMax(IRNODE)   ((IRNODE)->input_max)
+#define IrNodeGetOutputMax(IRNODE)  ((IRNODE)->output_max)
 
 /* Helper macro for iterating the def-use/use-def chains */
-#define IrNodeInputEnd(IRNODE) (&((IRNODE)->input_tail))
-#define IrNodeOutputEnd(IRNODE) (&((IRNODE)->output_tail))
-#define IrNodeInputBegin(IRNODE) (((IRNODE)->input_tail).next)
+#define IrNodeInputEnd(IRNODE)    ((struct IrUse*)(&((IRNODE)->input_tail)))
+#define IrNodeOutputEnd(IRNODE)   ((struct IrUse*)(&((IRNODE)->output_tail)))
+#define IrNodeInputBegin(IRNODE)  (((IRNODE)->input_tail).next)
 #define IrNodeOutputBegin(IRNODE) (((IRNODE)->output_tail).next)
 
 /* General purpose IrNode creation */
@@ -315,17 +326,23 @@ struct IrNode* IrNodeNewList( struct IrGraph* );
 /* For adding input into List/Map , do not use IrNodeAddInput/Output, but use
  * following functions which takes care of the effect */
 void IrNodeListAddArgument( struct IrGraph* ,
-                         struct IrNode*  ,
-                         struct IrNode*  ,
-                         struct IrNode* );
+                            struct IrNode*  ,
+                            struct IrNode*  );
+
+void IrNodeListAddRegion  ( struct IrGrpah* ,
+                            struct IrNode*  ,
+                            struct IrNode* );
 
 struct IrNode* IrNodeNewMap( struct IrGraph* );
 
 void IrNodeMapAddArgument( struct IrGraph* ,
-                        struct IrNode* map ,
-                        struct IrNode* key ,
-                        struct IrNode* val ,
-                        struct IrNode* region );
+                           struct IrNode* map ,
+                           struct IrNode* key ,
+                           struct IrNode* val );
+
+void IrNodeMapAddRegion  ( struct IrGraph* ,
+                           struct IrNode* ,
+                           struct IrNode* );
 
 /* A loaded closure is always no effect and not impcated by its upvalue */
 struct IrNode* IrNodeNewClosure( struct IrGraph* , int index );
@@ -341,6 +358,12 @@ struct IrNode* IrNodeNewCallIntrinsic( struct IrGraph* , enum IntrinsicFunction 
                                                          struct IrNode* region );
 
 enum IntrinsicFunction IrNodeCallIntrinsicGetFunction( struct IrNode* );
+
+static SPARROW_INLINE
+enum IntrinsicFunction IrNodeCallIntrinsicGetFunction( struct IrNode* node ) {
+  assert( node->op == IR_H_CALL_INTRINSIC );
+  return *((enum IntrinsicFunction*)(IrNodeGetData(node)));
+}
 
 /* Attribute/Global/Upvalue */
 struct IrNode* IrNodeNewAGet( struct IrGraph* , struct IrNode* tos ,
@@ -361,8 +384,17 @@ struct IrNode* IrNodeNewASetIntrinsic( struct IrGraph* , struct IrNode* tos,
                                                          struct IrNode* value ,
                                                          struct IrNode* region );
 
-enum IntrinsicAttribute IrNodeAGetIntrinsicGetIntrinsic( struct IrNode* );
-enum IntrinsicAttribute IrNodeASetIntrinsicGetIntrinsic( struct IrNode* );
+static SPARROW_INLINE
+enum IntrinsicAttribute IrNodeAGetIntrinsicGetIntrinsic( struct IrNode* node ) {
+  assert( node->op == IR_H_AGET_INTRINSIC );
+  return *((enum IntrinsicAttribute*)(IrNodeGetData(node)));
+}
+
+static SPARROW_INLINE
+enum IntrinsicAttribute IrNodeAGetIntrinsicGetIntrinsic( struct IrNode* node ) {
+  assert( node->op == IR_H_ASET_INTRINSIC );
+  return *((enum IntrinsicAttribute*)(IrNodeGetData(node)));
+}
 
 struct IrNode* IrNodeNewUGet( struct IrGraph* , uint32_t index,
                                                 struct IrNode* region );
@@ -383,6 +415,7 @@ struct IrNode* IrNodeNewGSet( struct IrGraph* , struct IrNode* name ,
  * Each control flow node can have *unbounded* Input node but fixed number of
  * output node. EG: a binary branch will have to force you to add a If node
  * since it is the only node that is able have 2 branches/output */
+
 struct IrNode* IrNodeNewRegion(struct IrGraph*);
 struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* cond, struct IrNode* pred );
 struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
@@ -418,7 +451,7 @@ struct IrNode* IrNodeNewPhi( struct IrGraph* , struct IrNode* left , struct IrNo
 struct IrGraph {
   struct Sparrow* sparrow;     /* Sparrow instance */
   struct ArenaAllocator arena; /* Allocator for IR nodes */
-  int node_id;                 /* Current node ID */
+  uint32_t node_id;            /* Current node ID */
   struct IrNode* start;        /* Start of the Node */
   struct IrNode* end  ;        /* End of the Node */
 };

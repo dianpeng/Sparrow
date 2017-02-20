@@ -8,7 +8,7 @@ void ObjMapInit( struct ObjMap* map , size_t capacity ) {
   if(capacity == 0) {
     map->entry = NULL;
   } else {
-    assert(!(capacity & (capacity-1)));
+    SPARROW_ASSERT(!(capacity & (capacity-1)));
     map->entry = calloc(capacity , sizeof(struct ObjMapEntry) );
   }
   map->cap = capacity;

@@ -1,6 +1,6 @@
 #include "lexer.h"
+#include "debug.h"
 #include <stdarg.h>
-#include <assert.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <math.h>
@@ -65,8 +65,8 @@ _pred1err( struct Lexer* lex , char lookahead ,
 static void
 skip_comment( struct Lexer* lex ) {
   int c;
-  assert(lex->src[lex->pos] == '/');
-  assert(lex->src[lex->pos+1] == '/');
+  SPARROW_ASSERT(lex->src[lex->pos] == '/');
+  SPARROW_ASSERT(lex->src[lex->pos+1] == '/');
   lex->pos+=2;
   while((c = lex->src[lex->pos])) {
     if(c == '\n') break;
@@ -90,7 +90,7 @@ lex_string( struct Lexer* lex ) {
   const char* start = lex->src + lex->pos;
   int c;
   StrBufClear(&(lex->lexeme.str));
-  assert(*start == '\"'); ++start;
+  SPARROW_ASSERT(*start == '\"'); ++start;
   while((c = *start)) {
     if(c == '\\') {
       /* Check if we have correct escape strings */
@@ -154,7 +154,7 @@ kw_comp( const char* L , const char* R ) {
     else
       return -1;
   }
-  assert(0); return -1;
+  SPARROW_ASSERT(0); return -1;
 }
 
 static int
@@ -313,7 +313,7 @@ struct Lexeme* LexerNext( struct Lexer* lex ) {
         return lex_var_or_kw(lex);
     }
   } while(1);
-  assert(0); return NULL;
+  SPARROW_ASSERT(0); return NULL;
 }
 
 void LexerUnescapeStringLiteral( struct StrBuf* sbuf , const char* str ,

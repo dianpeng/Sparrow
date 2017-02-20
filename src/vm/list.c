@@ -53,9 +53,9 @@ void ObjListResize( struct ObjList* self, size_t size ) {
 struct ObjList* ObjListSlice( struct Sparrow* sparrow , struct ObjList* list ,
     size_t start , size_t end ) {
   struct ObjList* new_list;
-  assert(start <= end);
+  SPARROW_ASSERT(start <= end);
   new_list = ObjNewList(sparrow,(end-start));
-  assert( new_list->cap >= (end-start) );
+  SPARROW_ASSERT( new_list->cap >= (end-start) );
   memcpy(new_list->arr,list->arr+start,(end-start)*sizeof(Value));
   new_list->size = (end-start);
   return new_list;
@@ -78,7 +78,7 @@ static void list_iter_deref( struct Sparrow* sth ,
     Value* value ) {
   struct ObjList* l;
   l = Vget_list(&(itr->obj));
-  assert((size_t)itr->u.index < l->size);
+  SPARROW_ASSERT((size_t)itr->u.index < l->size);
   if(value) *value = l->arr[itr->u.index];
   if(key) Vset_number(key,itr->u.index);
 }

@@ -1,15 +1,14 @@
 #include "bc.h"
+#include "debug.h"
 
 struct CStr VARG = CONST_CSTR("varg");
 
-#ifndef NDEBUG
 #define __(A,B,C) C,
 static int DEBUG_TABLE[SIZE_OF_BYTECODE+1] = {
   BYTECODE(__)
   -1
 };
 #undef __
-#endif /* NDEBUG */
 
 static const char* IFUNCTABLE[] = {
 #define __(A,B,C) C,
@@ -39,7 +38,7 @@ const char* IFuncGetName( enum IntrinsicFunction ifunc ) {
 #define __(A,B,C) case IFUNC_##A: return C;
   switch(ifunc) {
     INTRINSIC_FUNCTION(__)
-    default: assert(!"unreachable!"); return NULL;
+    default: SPARROW_UNREACHABLE(); return NULL;
   }
 #undef __
 }
@@ -66,8 +65,8 @@ const char* IAttrGetName( enum IntrinsicAttribute iattr ) {
 static void patchA( enum Bytecode op , uint32_t A ,
     uint8_t* location ) {
   uint32_t c1,c2,c3;
-  assert(op >= 0 && op < SIZE_OF_BYTECODE);
-  assert(A < MAX_ARG_VALUE);
+  SPARROW_ASSERT(op >= 0 && op < SIZE_OF_BYTECODE);
+  SPARROW_ASSERT(A < MAX_ARG_VALUE);
   c1 = (uint8_t)(A & 0xff);
   c2 = (uint8_t)((A & 0xff00)>>8);
   c3 = (uint8_t)((A & 0xff0000)>>16);
@@ -78,7 +77,7 @@ static void patchA( enum Bytecode op , uint32_t A ,
 }
 
 static void patchOP( enum Bytecode op , uint8_t* location ) {
-  assert(op >= 0 && op < SIZE_OF_BYTECODE);
+  SPARROW_ASSERT(op >= 0 && op < SIZE_OF_BYTECODE);
   *location = op;
 }
 
@@ -125,7 +124,7 @@ struct Label CodeBufferPutOP( struct CodeBuffer* cb ) {
   /* Add debug entry for this instructions */
   DynArrPush(cb,dbg,dbg);
   ++cb->ins_size;
-  assert(cb->ins_size == cb->dbg_size);
+  SPARROW_ASSERT(cb->ins_size == cb->dbg_size);
   ret.dbg_pos = cb->dbg_size -1;
   ret.code_pos= cb->pos-1;
   return ret;
@@ -140,11 +139,11 @@ struct Label CodeBufferPutA( struct CodeBuffer* cb ) {
       MemGrow((void**)&(cb->buf),&(cb->cap),1);
     } else break;
   }
-  assert(cb->pos+4 <= cb->cap);
+  SPARROW_ASSERT(cb->pos+4 <= cb->cap);
   encodeA(cb,BC_A,0);
   DynArrPush(cb,dbg,dbg);
   ++cb->ins_size;
-  assert(cb->ins_size == cb->dbg_size);
+  SPARROW_ASSERT(cb->ins_size == cb->dbg_size);
   ret.dbg_pos = cb->dbg_size - 1;
   ret.code_pos = cb->pos - 4;
   return ret;
@@ -160,15 +159,15 @@ int CodeBufferEmitA( struct CodeBuffer* cb ,
       MemGrow((void**)&(cb->buf),&(cb->cap),1);
     }
   }
-  assert(cb->pos+4 <= cb->cap);
-  assert(A < MAX_ARG_VALUE);
-  assert(DEBUG_TABLE[op]);
+  SPARROW_ASSERT(cb->pos+4 <= cb->cap);
+  SPARROW_ASSERT(A < MAX_ARG_VALUE);
+  SPARROW_ASSERT(DEBUG_TABLE[op]);
   encodeA(cb,op,A);
   dbg.line = line;
   dbg.ccnt = ccnt;
   DynArrPush(cb,dbg,dbg);
   ++cb->ins_size;
-  assert(cb->ins_size == cb->dbg_size);
+  SPARROW_ASSERT(cb->ins_size == cb->dbg_size);
   return 0;
 }
 
@@ -179,13 +178,13 @@ int CodeBufferEmitOP( struct CodeBuffer* cb ,
   if(cb->pos == cb->cap) {
     MemGrow((void**)&(cb->buf),&(cb->cap),1);
   }
-  assert(!DEBUG_TABLE[op]);
+  SPARROW_ASSERT(!DEBUG_TABLE[op]);
   encodeOP(cb,op);
   dbg.line = line;
   dbg.ccnt = ccnt;
   DynArrPush(cb,dbg,dbg);
   ++cb->ins_size;
-  assert(cb->ins_size == cb->dbg_size);
+  SPARROW_ASSERT(cb->ins_size == cb->dbg_size);
   return 0;
 }
 
@@ -193,8 +192,8 @@ void CodeBufferPatchOP( struct CodeBuffer* cb,
     struct Label l,
     enum Bytecode op,
     size_t line, size_t ccnt ) {
-  assert(l.code_pos < cb->pos);
-  assert(cb->buf[l.code_pos] == BC_OP);
+  SPARROW_ASSERT(l.code_pos < cb->pos);
+  SPARROW_ASSERT(cb->buf[l.code_pos] == BC_OP);
   patchOP(op,cb->buf + l.code_pos);
   cb->dbg_arr[l.dbg_pos].line = line;
   cb->dbg_arr[l.dbg_pos].ccnt = ccnt;
@@ -204,9 +203,9 @@ void CodeBufferPatchA( struct CodeBuffer* cb,
     struct Label l,
     enum Bytecode op, uint32_t A,
     size_t line, size_t ccnt ) {
-  assert(l.code_pos < cb->pos);
-  assert(cb->buf[l.code_pos] == BC_A);
-  assert(A < MAX_ARG_VALUE);
+  SPARROW_ASSERT(l.code_pos < cb->pos);
+  SPARROW_ASSERT(cb->buf[l.code_pos] == BC_A);
+  SPARROW_ASSERT(A < MAX_ARG_VALUE);
   patchA(op,A,cb->buf + l.code_pos);
   cb->dbg_arr[l.dbg_pos].line = line;
   cb->dbg_arr[l.dbg_pos].ccnt = ccnt;
@@ -245,7 +244,7 @@ void CodeBufferDump( const struct CodeBuffer* cb,
     switch(op) {
       BYTECODE(__)
       default:
-        assert(!"unreachable!");
+        SPARROW_UNREACHABLE();
         return;
     }
 
