@@ -32,9 +32,6 @@
 #define CODE_BUFFER_INITIAL_SIZE 32
 #endif /* CODE_BUFFER_INITIAL_SIZE */
 
-/* Varg local variable name */
-extern struct CStr VARG;
-
 /* Order matters, don't adjust order !! */
 #define BYTECODE(__) \
   /* Intrinsic functions , must be at very first to start \

@@ -106,22 +106,29 @@ struct aa_chunk {
   struct aa_chunk* next;
 };
 
-void ArenaAllocatorInit( struct ArenaAllocator* aa ,
-    size_t initial_size ,
+struct ArenaAllocator {
+  void* ck_list; /* Chunk list , for freeing */
+  void* cur_ptr; /* Current pool pointer , for allocation */
+  size_t cur_sz; /* Current pool size */
+  size_t pool_sz;/* Current pool capacity */
+  size_t max_sz ;/* Maximum waterlevel */
+};
+
+struct ArenaAllocator* ArenaAllocatorCreate( size_t initial_size ,
     size_t maximum_size ) {
   /* TODO:: Round initial_size to avoid internal fragmentation comes
    * from underlying allocator ??? */
   struct aa_chunk* ck;
+  struct ArenaAllocator* aa = malloc(sizeof(*aa));
   assert(initial_size <= maximum_size);
-
   ck = malloc(sizeof(*ck) + initial_size);
   ck->next = NULL;
-
   aa->cur_sz  = initial_size;
   aa->pool_sz = initial_size;
   aa->max_sz  = maximum_size;
   aa->cur_ptr = (char*)(ck) + sizeof(*ck);
   aa->ck_list = ck;
+  return aa;
 }
 
 static void aa_grow( struct ArenaAllocator* aa , size_t guarantee ) {
@@ -167,4 +174,5 @@ void ArenaAllocatorDestroy( struct ArenaAllocator* aa ) {
   aa->cur_sz = 0;
   aa->max_sz = 0;
   aa->pool_sz =0;
+  free(aa);
 }

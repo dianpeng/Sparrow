@@ -81,7 +81,9 @@ struct IrGraph;
   X(PRIMITIVE_LIST,"primitive_list") \
   X(PRIMITIVE_MAP,"primitive_map") \
   X(PRIMITIVE_PAIR,"primitive_pair") \
-  X(PRIMITIVE_CLOSURE,"primitive_closure")
+  X(PRIMITIVE_CLOSURE,"primitive_closure") \
+  X(PRIMITIVE_UPVALUE_DETACH,"primitive_upvalue_detach") \
+  X(PRIMITIVE_ARGUMENT,"primitive_argument")
 
 /* High level IR , the IR is mostly a one-2-one mapping of the bytecode and with
  * some simplicity. It is the IR that is used to build IR graph */
@@ -100,6 +102,10 @@ struct IrGraph;
   X(H_GE,"h_ge") \
   X(H_EQ,"h_eq") \
   X(H_NE,"h_he") \
+  /* Unary */ \
+  X(H_NEG,"h_neg") \
+  X(H_NOT,"h_not") \
+  X(H_TEST,"h_test") \
   /* Upvalue */ \
   X(H_UGET,"h_uget") \
   X(H_USET,"h_uset") \
@@ -119,10 +125,6 @@ struct IrGraph;
   /* Global */ \
   X(H_GGET,"h_gget") \
   X(H_GSET,"h_gset") \
-  /* Unary */ \
-  X(H_NEG,"h_neg") \
-  X(H_NOT,"h_not") \
-  X(H_TEST,"h_test") \
   /* Iterator */ \
   X(H_ITER_TEST,"h_iter_test") \
   X(H_ITER_NEW ,"h_iter_new") \
@@ -208,11 +210,33 @@ static SPARROW_INLINE int IrIsHighIr(int opcode) {
   return IrGetKindCode(opcode) == IRKIND_HIGH_IROP;
 }
 
-int IrNumberGetType(double number);
+/* Detailed opcode category function */
+static SPARROW_INLINE int IrIsHighIrBinary(int opcode) {
+  return IrGetKindCode(opcode) == IRKIND_HIGH_IROP &&
+         ( opcode >= IR_H_ADD && opcode <= IR_H_NE );
+}
+
+static SPARROW_INLINE int IrIsHighIrUnary (int opcode) {
+  return IrGetKindCode(opcode) == IRKIND_HIGH_IROP &&
+         ( opcode >= IR_H_NEG && opcode <= IR_H_TEST);
+}
+
+const char* IrGetName( int opcode );
+
+static SPARROW_INLINE int IrNumberGetType(double number);
 
 /* IrUse. A use structure represents the def-use/use-def chain element. Since
  * the chain will be modified during IrGraph construction. We use a double
- * linked list here to ease the pain for removing a certain use from the IR */
+ * linked list here to ease the pain for removing a certain use from the IR .
+ *
+ * The following code uses a very ugly hack. The IrUseBase just has same structure
+ * as the very first unnamed structure embedded inside of IrUse. Since we are
+ * using double linked list so the tail element could just be declared as IrUseBase
+ * which saves a pointer's space. Then we cast IrUseBase to IrUse to do pointer
+ * comparison but we never use the node field.
+ *
+ * The embedded unnamed structure is simply to ease the pain for accessing the
+ * field of prev and next */
 struct IrUse;
 
 struct IrUseBase {
@@ -337,6 +361,7 @@ struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value );
 #define IrNodeNewConstTrue(GRAPH) IrNodeNewConstBoolean(GRAPH,1)
 #define IrNodeNewConstFalse(GRAPH) IrNodeNewConstBoolean(GRAPH,0)
 struct IrNode* IrNodeNewConstNull( struct IrGraph* );
+struct IrNode* IrNodeNewArgument ( struct IrGraph* , uint32_t index );
 
 /* Primitive */
 struct IrNode* IrNodeNewList( struct IrGraph* );
@@ -363,7 +388,27 @@ void IrNodeMapSetRegion  ( struct IrGraph* ,
                            struct IrNode* );
 
 /* A loaded closure is always no effect and not impcated by its upvalue */
-struct IrNode* IrNodeNewClosure( struct IrGraph* , int index );
+struct IrNode* IrNodeNewClosure( struct IrGraph* , const struct ObjProto* , size_t upcnt );
+
+void IrNodeClosureAddUpvalueEmbed(struct IrGraph* ,
+                                  struct IrNode* ,
+                                  struct IrNode* );
+
+void IrNodeClosureAddUpvalueDetach(struct IrGraph* ,
+                                   struct IrNode*  ,
+                                   uint32_t index );
+
+static SPARROW_INLINE
+uint32_t IrNodeUpvalueDetachGetIndex( struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_PRIMITIVE_UPVALUE_DETACH);
+  return *((uint32_t*)(IrNodeGetData(node)));
+}
+
+static SPARROW_INLINE
+const struct ObjProto* IrNodeClosureGetProto( struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_PRIMITIVE_CLOSURE);
+  return *((const struct ObjProto**)(IrNodeGetData(node)));
+}
 
 /* Function call */
 struct IrNode* IrNodeNewCall( struct IrGraph* , struct IrNode* function ,
@@ -470,13 +515,21 @@ struct IrNode* IrNodeNewProjection( struct IrGraph* , struct IrNode* target ,
  */
 struct IrGraph {
   struct Sparrow* sparrow;     /* Sparrow instance */
-  struct ArenaAllocator arena; /* Allocator for IR nodes */
+  const struct ObjModule* mod ;/* Target module */
+  const struct ObjProto* proto;/* Targeted function */
+  struct ArenaAllocator* arena; /* Allocator for IR nodes */
   uint32_t node_id;            /* Current node ID */
   struct IrNode* start;        /* Start of the Node */
   struct IrNode* end  ;        /* End of the Node */
 };
 
 /* Initialize a IrGraph object with regards to a specific protocol object */
-void IrGraphInit( struct IrGraph* , const struct ObjProto* , struct Sparrow* );
+void IrGraphInit( struct IrGraph* , const struct ObjModule* module ,
+                                    const struct ObjProto*  protocol,
+                                    struct Sparrow* );
+
+void IrGraphInitForInline( struct IrGraph* new_graph ,
+                           struct IrGraph* parent_graph ,
+                           uint32_t protocol_index );
 
 #endif /* IR_H_ */

@@ -116,7 +116,33 @@ struct BytecodeIrBuilder {
 
   /* Loop builder , if we are in the loop, then this field will be set */
   struct LoopBuilder* loop;
+
+  /* This is used only when INLINEING is using .
+   *
+   * This is not a *CONST* since we gonna modify this graph */
+  struct IrGraph* parent_graph;
 };
+
+static void builder_init( struct BytecodeIrBuilder* builder , struct IrGraph* graph ,
+                                                              struct IrGraph* parent_graph ) {
+  builder->proto = graph->proto;
+  builder->graph = graph;
+  ss_init(&(builder->stack));
+  /* New a new region node */
+  if(!parent_graph) {
+    /* If we are not for an inline */
+    builder->region = IrNodeNewRegion(graph);
+    IrNodeAddOutput(graph,graph->start,builder->region);
+  }
+
+  builder->code_pos = 0;
+  builder->mregion = malloc(sizeof(*builder->mregion));
+  builder->mregion->mregion_arr = NULL;
+  builder->mregion->mregion_size = 0;
+  builder->mregion->mregion_arr = 0;
+  builder->loop = NULL;
+  builder->parent_graph = parent_graph;
+}
 
 static void builder_clone( const struct BytecodeIrBuilder* old_builder ,
                           struct BytecodeIrBuilder* new_builder ,
@@ -126,6 +152,9 @@ static void builder_clone( const struct BytecodeIrBuilder* old_builder ,
   ss_clone(&(old_builder->stack),&(new_builder->stack));
   new_builder->region = new_region;
   new_builder->code_pos = old_builder->code_pos;
+  new_builder->mregion = old_builder->mregion;
+  new_builder->loop = old_builder->loop;
+  new_builder->parent_graph = old_builder->parent_graph;
 }
 
 static void builder_destroy( struct BytecodeIrBuilder* builder ) {
@@ -135,6 +164,13 @@ static void builder_destroy( struct BytecodeIrBuilder* builder ) {
   builder->code_pos = 0;
   builder->mregion = NULL;
   ss_destroy(&(builder->stack));
+}
+
+static void builder_destroy_all( struct BytecodeIrBuilder* builder ) {
+  free(builder->mregion->mregion_arr);
+  free(builder->mregion);
+  builder->mregion = NULL;
+  builder_destroy(builder);
 }
 
 /* Merge the *right* bytecode_ir_builder into *left* builder . And the right
@@ -1201,8 +1237,30 @@ static int build_bytecode( struct Sparrow* sparrow ,
     }
 
     CASE(BC_LOADCLS) {
+      struct IrNode* closure;
+      struct ObjProto* new_proto;
+      size_t i;
       DECODE_ARG();
-      ss_push(stack,IrNodeNewClosure(builder->graph,opr));
+      new_proto = builder->graph->mod->cls_arr[opr];
+      closure = IrNodeNewClosure(builder->graph,
+                                 new_proto,
+                                 new_proto->uv_size);
+
+      /* Now we need to add all the upvalue be part of the Closure */
+      for( i = 0 ; i < new_proto->uv_size ; ++i ) {
+        const struct UpValueIndex* idx = new_proto->uv_arr + i;
+        if(idx->state == UPVALUE_INDEX_EMBED) {
+          /* Embedded upvalue, directly fetch it from the stack */
+          IrNodeClosureAddUpvalueEmbed(builder->graph,
+              closure,
+              ss_bot(stack,idx->idx));
+        } else {
+          IrNodeClosureAddUpvalueDetach(builder->graph,
+              closure,
+              idx->idx);
+        }
+      }
+
       DISPATCH();
     }
 
@@ -2088,4 +2146,29 @@ static int build_bytecode( struct Sparrow* sparrow ,
   /* bump the code pointer */
   builder->code_pos = code_pos;
   return 0;
+}
+
+/* Interface ========================================================== */
+int BytecodeToIrGraph( struct Sparrow* sparrow , struct IrGraph* graph ) {
+  struct BytecodeIrBuilder builder;
+  size_t code_len = graph->proto->code_buf.pos;
+  int ret = 0;
+  size_t i;
+  builder_init(&builder,graph,NULL);
+
+  /* Push all the argument into the stack */
+  for( i = 0 ; i < builder.proto->narg ; ++i ) {
+    ss_push(&(builder.stack),IrNodeNewArgument(graph,i));
+  }
+
+  /* Building the IrGraph */
+  while(builder.code_pos < code_len) {
+    if(build_bytecode(sparrow,&builder)) {
+      ret = -1;
+      break;
+    }
+  }
+
+  builder_destroy_all(&builder);
+  return ret;
 }

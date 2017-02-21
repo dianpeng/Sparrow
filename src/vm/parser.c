@@ -349,7 +349,6 @@ resolve_upvar( struct Parser* p , const struct ObjStr* str ) {
   return -1;
 }
 
-// Try to find the *upvar* in upvalue table
 static int
 find_upvar( struct Parser* p , const struct ObjStr* str ) {
   struct PClosure* start = cclosure(p);
@@ -1618,7 +1617,6 @@ static int _parse_closureproto( struct Parser* p ,
     objc->proto= CStrPrintF("()");
     return 0;
   } else {
-    // (void)def_locvar(p,&VARG,0); /* cannot fail */
     do {
       if(LexerToken(&(p->lex)) == TK_VARIABLE) {
         if(argarr_sz == CLOSURE_ARG_MAX) {

@@ -328,29 +328,17 @@ char* ReadFile( const char* filepath , size_t* length );
 
 /* Arena allocator or bump allocator. Used in backend to generate IR,
  * sea of nodes */
-struct ArenaAllocator {
-  void* ck_list; /* Chunk list , for freeing */
-  void* cur_ptr; /* Current pool pointer , for allocation */
-  size_t cur_sz; /* Current pool size */
-  size_t pool_sz;/* Current pool capacity */
-  size_t max_sz ;/* Maximum waterlevel */
-};
-
-void ArenaAllocatorInit( struct ArenaAllocator* aa ,
-    size_t initial_size ,
-    size_t maximum_size ) ;
-
+struct ArenaAllocator;
+struct ArenaAllocator* ArenaAllocatorCreate( size_t initial_size , size_t maximum_size ) ;
 void* ArenaAllocatorAlloc( struct ArenaAllocator* aa , size_t size );
-
 void ArenaAllocatorDestroy(struct ArenaAllocator* aa );
+
 
 /* Macro to help handling common dynamic array pattern in C.
  * The decalaration must be :
  * NAME_arr;
  * NAME_size;
- * NAME_cap;
- */
-
+ * NAME_cap; */
 #define DynArrPush(C,PREFIX,OBJ) \
   do { \
     if((C)->PREFIX##_size == (C)->PREFIX##_cap) { \

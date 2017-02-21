@@ -1,8 +1,9 @@
 #ifndef BC_IR_BUILDER_H_
 #define BC_IR_BUILDER_H_
+#include "../../conf.h"
+
 struct IrGraph;
 struct Sparrow;
-struct ObjProto;
 
 /* This BytecodeIrBuilder will convert Bytecode sequence to HIGH level IR
  * graph.
@@ -81,6 +82,6 @@ struct ObjProto;
  *
  */
 
-int BytecodeToIrGraph( struct Sparrow* , struct IrGraph* , struct ObjProto* );
+int BytecodeToIrGraph( struct Sparrow* , struct IrGraph* );
 
 #endif /* BC_IR_BUILDER_H_ */

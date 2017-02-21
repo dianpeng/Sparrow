@@ -4,7 +4,7 @@
 /* Linked list related stuff */
 #define link_node( GRAPH , IRNODE , ELEMENT , TYPE ) \
   do { \
-    struct IrUse* use = ArenaAllocatorAlloc(&((GRAPH)->arena),sizeof(*use)); \
+    struct IrUse* use = ArenaAllocatorAlloc(((GRAPH)->arena),sizeof(*use)); \
     struct IrUse* tail = (struct IrUse*)(&(IRNODE)->TYPE##_tail); \
     use->node = (ELEMENT); \
     use->prev = tail->prev; \
@@ -30,6 +30,15 @@
   } while(0)
 
 #define IRNODE_GET_DATA(IRNODE,TYPE) (TYPE)IrNodeGetData(IRNODE)
+
+const char* IrGetName( int opcode ) {
+#define __(A,B) case IR_##A : return B ;
+  switch(opcode) {
+    ALL_IRS(__)
+    default: return NULL;
+#undef __
+  }
+}
 
 static void
 add_region( struct IrGraph* graph , struct IrNode* region , struct IrNode* node ) {
@@ -99,7 +108,7 @@ static struct IrNode* new_node( struct IrGraph* graph , int op ,
                                                  int input_max ,
                                                  int output_max ,
                                                  size_t extra ) {
-  struct IrNode* bin = ArenaAllocatorAlloc(&(graph->arena), sizeof(*bin) + extra);
+  struct IrNode* bin = ArenaAllocatorAlloc((graph->arena), sizeof(*bin) + extra);
   bin->op = op;
   bin->effect = effect;
   bin->prop_effect = prop_effect;
@@ -116,7 +125,7 @@ struct IrNode* IrNodeNewBinary( struct IrGraph* graph , int op , struct IrNode* 
                                                                  struct IrNode* right,
                                                                  struct IrNode* region ) {
   struct IrNode* bin;
-  SPARROW_ASSERT(IrIsHighIr(op));
+  SPARROW_ASSERT(IrIsHighIrBinary(op));
   bin = new_node(graph,op,
                        0,
                        IrNodeHasEffect(left) || IrNodeHasEffect(right),
@@ -137,7 +146,7 @@ struct IrNode* IrNodeNewBinary( struct IrGraph* graph , int op , struct IrNode* 
 struct IrNode* IrNodeNewUnary( struct IrGraph* graph , int op , struct IrNode* operand ,
                                                                 struct IrNode* region ) {
   struct IrNode* bin;
-  SPARROW_ASSERT(IrIsHighIr(op));
+  SPARROW_ASSERT(IrIsHighIrUnary(op));
   bin = new_node(graph,op,
                        0,
                        IrNodeHasEffect(operand),
@@ -199,9 +208,6 @@ struct IrNode* new_number_node( struct IrGraph* graph , double num ) {
   }
 
   return bin;
-}
-
-int IrNumberGetType( double number ) {
 }
 
 struct IrNode* IrNodeGetConstNumber( struct IrGraph* graph , int32_t number ) {
@@ -276,11 +282,24 @@ void IrNodeMapSetRegion( struct IrGraph* graph , struct IrNode* map ,
   }
 }
 
-struct IrNode* IrNodeNewClosure( struct IrGraph* graph , int index ) {
+struct IrNode* IrNodeNewClosure( struct IrGraph* graph , const struct ObjProto* proto
+                                                       , size_t upcnt ) {
   struct IrNode* bin;
-  bin = new_node( graph , IR_PRIMITIVE_CLOSURE , 0 , 0 , 0 , -1 , sizeof(int));
-  *IRNODE_GET_DATA(bin,int*) = index;
+  bin = new_node( graph , IR_PRIMITIVE_CLOSURE , 0 , 0 ,upcnt, -1 , sizeof(void*));
+  *IRNODE_GET_DATA(bin,const struct ObjProto**) = proto;
   return bin;
+}
+
+void IrNodeClosureAddUpvalueEmbed( struct IrGraph* graph , struct IrNode* closure ,
+                                                           struct IrNode* upvalue ) {
+  add_def_use(graph,closure,upvalue);
+}
+
+void IrNodeClosureAddUpvalueDetach(struct IrGraph* graph , struct IrNode* closure ,
+                                                           uint32_t index ) {
+  struct IrNode* detach = new_node(graph,IR_PRIMITIVE_UPVALUE_DETACH,0,0,0,-1,sizeof(uint32_t));
+  *IRNODE_GET_DATA(detach,uint32_t*) = index;
+  add_def_use(graph,closure,detach);
 }
 
 struct IrNode* IrNodeNewCall( struct IrGraph* graph , struct IrNode* function ,
@@ -288,6 +307,13 @@ struct IrNode* IrNodeNewCall( struct IrGraph* graph , struct IrNode* function ,
   struct IrNode* bin = new_node( graph , IR_H_CALL , 1 , 0 , -1 , -1 , 0 );
   add_def_use(graph,bin,function);
   add_region(graph,region,bin);
+  return bin;
+}
+
+struct IrNode* IrNodeNewArgument(struct IrGraph* graph , uint32_t index ) {
+  struct IrNode* bin = new_node( graph , IR_PRIMITIVE_ARGUMENT ,
+                                         0 , 0 , 0 , -1, sizeof(uint32_t));
+  *IRNODE_GET_DATA(bin,uint32_t*) = index;
   return bin;
 }
 
@@ -486,3 +512,28 @@ struct IrNode* IrNodeNewProjection( struct IrGraph* graph , struct IrNode* targe
   add_region(graph,region,node);
   return node;
 }
+
+/* IrGraph ======================================== */
+void IrGraphInit( struct IrGraph* graph , const struct ObjModule* module,
+                                          const struct ObjProto* protocol ,
+                                          struct Sparrow* sparrow ) {
+  graph->sparrow = sparrow;
+  graph->mod = module;
+  graph->proto = protocol;
+  graph->arena = ArenaAllocatorCreate(1024,1024*1024);
+  graph->node_id = 0;
+  graph->start = new_node( graph , IR_CTL_START , 0 , 0 , 0 , 1 , 0 );
+  graph->end   = new_node( graph , IR_CTL_END   , 0 , 0 , 0 , 0 , 0 );
+}
+
+void IrGraphInitForInline( struct IrGraph* new_graph ,
+                           struct IrGraph* old_graph ,
+                           uint32_t protocol_index ) {
+  new_graph->sparrow = old_graph->sparrow;
+  new_graph->mod = old_graph->mod;
+  new_graph->proto = old_graph->mod->cls_arr[protocol_index];
+  new_graph->arena = old_graph->arena;
+  new_graph->start = IrNodeNewRegion( new_graph );
+  new_graph->end   = IrNodeNewRegion( new_graph );
+}
+

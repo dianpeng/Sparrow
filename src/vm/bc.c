@@ -1,8 +1,6 @@
 #include "bc.h"
 #include "debug.h"
 
-struct CStr VARG = CONST_CSTR("varg");
-
 #define __(A,B,C) C,
 static int DEBUG_TABLE[SIZE_OF_BYTECODE+1] = {
   BYTECODE(__)
