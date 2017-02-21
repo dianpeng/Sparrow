@@ -1,7 +1,7 @@
 #include "bc-ir-builder.h"
 #include "ir.h"
-#include "../bc.h"
-#include "../object.h"
+#include "../vm/bc.h"
+#include "../vm/object.h"
 
 /* Forward =========================> */
 struct LoopBuilder;

@@ -1,6 +1,6 @@
 #ifndef BC_IR_BUILDER_H_
 #define BC_IR_BUILDER_H_
-#include "../../conf.h"
+#include "../conf.h"
 
 struct IrGraph;
 struct Sparrow;

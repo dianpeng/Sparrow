@@ -1,10 +1,10 @@
 #ifndef IR_H_
 #define IR_H_
-#include "../../conf.h"
-#include "../util.h"
-#include "../bc.h"
-#include "../object.h"
-#include "../debug.h"
+#include "../conf.h"
+#include "../vm/util.h"
+#include "../vm/bc.h"
+#include "../vm/object.h"
+#include "../vm/debug.h"
 
 struct IrNode;
 struct IrLink;
