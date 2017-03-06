@@ -1,9 +1,9 @@
-#include "vm.h"
-#include "map.h"
-#include "list.h"
-#include "bc.h"
-#include "error.h"
-#include "builtin.h"
+#include <vm/vm.h>
+#include <vm/map.h>
+#include <vm/list.h>
+#include <vm/bc.h>
+#include <vm/error.h>
+#include <vm/builtin.h>
 #include <math.h>
 
 /* helper macros */
@@ -34,7 +34,7 @@ static void exec_error( struct Runtime* , const char* , ... );
 
 static SPARROW_INLINE
 int push( struct CallThread* thread ,Value val ) {
-  if(SP_UNLIKELY(thread->stack_size == thread->stack_cap)) {
+  if(SPARROW_UNLIKELY(thread->stack_size == thread->stack_cap)) {
     size_t ncap = 2 * thread->stack_cap;
     thread->stack = realloc(thread->stack,sizeof(Value)*ncap);
   }
@@ -1001,8 +1001,8 @@ int add_callframe( struct Runtime* rt ,int argnum ,
     struct ObjClosure* cls , Value tos ) {
   struct CallThread* thread = RTCallThread(rt);
   struct CallFrame* frame;
-  if(SP_UNLIKELY(thread->frame_size == thread->frame_cap)) {
-    if(SP_UNLIKELY(thread->frame_size >= rt->max_funccall)) {
+  if(SPARROW_UNLIKELY(thread->frame_size == thread->frame_cap)) {
+    if(SPARROW_UNLIKELY(thread->frame_size >= rt->max_funccall)) {
       exec_error(rt,PERR_TOO_MANY_FUNCCALL);
       return -1;
     } else {

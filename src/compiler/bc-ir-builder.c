@@ -1,7 +1,7 @@
-#include "bc-ir-builder.h"
-#include "ir.h"
-#include "../vm/bc.h"
-#include "../vm/object.h"
+#include <compiler/bc-ir-builder.h>
+#include <compiler/ir.h>
+#include <vm/bc.h>
+#include <vm/object.h>
 
 /* Forward =========================> */
 struct LoopBuilder;
@@ -176,7 +176,8 @@ static void builder_destroy_all( struct BytecodeIrBuilder* builder ) {
 /* Merge the *right* bytecode_ir_builder into *left* builder . And the right
  * hand side will be destroyed */
 static void builder_place_phi( struct BytecodeIrBuilder* left ,
-                               struct BytecodeIrBuilder* right ) {
+                               struct BytecodeIrBuilder* right ,
+                               struct IrNode* region ) {
   size_t i;
   const size_t len = MIN(left->stack.stk_size,right->stack.stk_size);
   /* The merge really just means place PHI node. Our phi node is simply a
@@ -190,7 +191,8 @@ static void builder_place_phi( struct BytecodeIrBuilder* left ,
     if(left_node != right_node) {
       left->stack.stk_arr[i] = IrNodeNewPhi(left->graph,
                                             left->stack.stk_arr[i],
-                                            right->stack.stk_arr[i]);
+                                            right->stack.stk_arr[i],
+                                            region);
     }
   }
   builder_destroy(right);
@@ -321,6 +323,7 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
   struct IrNode* if_false;
   struct BytecodeIrBuilder true_builder;
   struct BytecodeIrBuilder false_builder;
+  struct IrNode* merge;
 
   (void)sparrow;
   SPARROW_ASSERT(code_buf->buf[builder->code_pos] == BC_IF);
@@ -378,30 +381,34 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
       /* Update the if_false region node */
       if_false = false_builder.region;
 
+      /* Create merge region */
+      merge = builder_get_or_create_merged_region(builder,
+          merge_pos,
+          if_true,
+          if_false);
+
       /* Place the PHI nodes on the stack */
-      builder_place_phi( &true_builder, &false_builder );
+      builder_place_phi( &true_builder, &false_builder , merge );
 
       ss_move(&(builder->stack) , &(true_builder.stack));
       builder_destroy(&true_builder);
     } else {
-      /* Place the PHI nodes on the stack */
-      builder_place_phi( builder, &true_builder );
-
       /* Merge pos is the current position where the code halts */
       merge_pos = true_builder.code_pos;
+
+      /* Create merge node */
+      merge = builder_get_or_create_merged_region(builder,
+          merge_pos,
+          if_true,
+          if_false);
+
+      /* Place the PHI nodes on the stack */
+      builder_place_phi( builder, &true_builder , merge );
     }
   }
 
-  /* 3. Generate the merge region and join the branch nodes */
-  {
-    struct IrNode* merge = builder_get_or_create_merged_region(builder,
-        merge_pos,
-        if_true,
-        if_false);
-    builder->region = merge;
-    builder->code_pos = merge_pos;
-  }
-
+  builder->region = merge;
+  builder->code_pos = merge_pos;
   return 0;
 }
 
@@ -526,6 +533,7 @@ static int build_loop( struct Sparrow* sparrow ,
   struct LoopBuilder loop;
   struct LoopBuilder* saved_loop_builder;
   struct BytecodeIrBuilder loop_body_builder;
+  struct IrNode* merge;
   uint32_t merge_pos;
 
   /* Saved the current builder's loop when we are in nested loop */
@@ -553,12 +561,20 @@ static int build_loop( struct Sparrow* sparrow ,
     IrNodeAddOutput(builder->graph,builder->region,loop.loop_exit);
   }
 
-  /* 2. Phase2 : Generate PHI and modify all the node that reference the PHI
-   * node */
+  /* 2. Phase2 : Generate PHI and modify all the node that
+   * reference the PHI node */
   {
     const size_t len = MIN(builder->stack.stk_size,
                            loop_body_builder.stack.stk_size);
     size_t i;
+
+    /* Get the merge node */
+    merge = builder_get_or_create_merged_region(
+        builder,
+        merge_pos,
+        loop.loop_exit_true,
+        loop.loop_exit_false
+        );
 
     for( i = 0 ; i < len ; ++i ) {
       struct IrNode* left = builder->stack.stk_arr[i];
@@ -570,7 +586,7 @@ static int build_loop( struct Sparrow* sparrow ,
          * this new PHI ,all the statement that reference to this PHI needs
          * to be modified as well.
          * We could know those used node by inspecting the def-use chain */
-        struct IrNode* phi = IrNodeNewPhi(builder->graph,left,right);
+        struct IrNode* phi = IrNodeNewPhi(builder->graph,left,right,merge);
         struct IrUse* start= IrNodeOutputBegin(right);
 
         while(start != IrNodeOutputEnd(right)) {
@@ -579,7 +595,28 @@ static int build_loop( struct Sparrow* sparrow ,
             struct IrUse* use_place = IrNodeFindInput(victim,right);
             SPARROW_ASSERT(use_place);
 
-            /* patched the used place to use new phi node */
+            /* patched the used place to use new phi node .
+             *
+             * NOTES:
+             *
+             * This patch will introduce redudancy in control flow graph.
+             * Assume PHI has trivial side effect and then it will be bounded
+             * to the merge region, however this PHI is used here by an
+             * expression and that expression also has trivial side effects
+             * then it is also bounded to a control flow graph node.
+             * So we will see 2 nodes bounded to a control flow graph that could
+             * reach to *SAME* node which is the PHI.
+             *
+             * For scheduling , this is fine since each node is SSA so we only
+             * need to visit each node once. But there's one caveats is that
+             * if we generate scheduling in a fowrad pass then we will generate
+             * node of that SSA at very first which may not be the optimal placement
+             * of instruction. We have 2 choice 1) Add an extra pass to *SINK*
+             * the PHI node to its earlist actual use.Or 2) Generate scheduling in
+             * a backward pass.
+             *
+             * We will choose second method , I guess.
+             */
             use_place->node = phi;
 
             /* add the victim node into phi's use chain */
@@ -598,16 +635,9 @@ static int build_loop( struct Sparrow* sparrow ,
     }
   }
 
-  /* 3. Add the merge node */
+  /* 3. Updating information and SANITY CHECK */
   {
-    struct IrNode* merge = builder_get_or_create_merged_region(
-        builder,
-        merge_pos,
-        loop.loop_exit_true,
-        loop.loop_exit_false
-        );
     builder->region = merge;
-
     /* SANITY CHECK ************************** */
     SPARROW_ASSERT( code_buf->buf[ loop_body_builder.code_pos ] == BC_FORLOOP );
     SPARROW_ASSERT( loop_body_builder.code_pos + 4 == merge_pos );
@@ -753,7 +783,8 @@ static int build_list( struct Sparrow* sparrow ,
   for( i = size - 1 ; i >= 0 ; --i ) {
     IrNodeListAddArgument(builder->graph,
                        list,
-                       ss_top(&(builder->stack),i));
+                       ss_top(&(builder->stack),i),
+                       builder->region);
   }
 
   IrNodeListSetRegion(builder->graph,list,builder->region);
@@ -795,7 +826,8 @@ static int build_map( struct Sparrow* sparrow ,
     IrNodeMapAddArgument(builder->graph,
                       map,
                       ss_top(&(builder->stack),i+1),
-                      ss_top(&(builder->stack),i));
+                      ss_top(&(builder->stack),i),
+                      builder->region);
   }
 
   IrNodeMapSetRegion(builder->graph,map,builder->region);
@@ -854,7 +886,9 @@ static int build_call( struct Sparrow* sparrow ,
   call = IrNodeNewCall( builder->graph , function , builder->region );
 
   for( i = arg_count - 1 ; i >= 0 ; --i ) {
-    IrNodeCallAddArg(builder->graph, call, ss_top(&(builder->stack),i));
+    IrNodeCallAddArg(builder->graph, call,
+                                     ss_top(&(builder->stack),i),
+                                     builder->region);
   }
 
   ss_pop(&(builder->stack),arg_count+1);
@@ -872,7 +906,10 @@ static int build_call_intrinsic( struct Sparrow* sparrow ,
   arg_count = (int)CodeBufferDecodeArg(code_buf,builder->code_pos+1);
   call = IrNodeNewCallIntrinsic(builder->graph,func,builder->region);
   for( i = arg_count -1 ; i >= 0 ; --i ) {
-    IrNodeCallAddArg(builder->graph,call,ss_top(&(builder->stack),i));
+    IrNodeCallAddArg(builder->graph,
+                     call,
+                     ss_top(&(builder->stack),i),
+                     builder->region);
   }
 
   ss_pop(&(builder->stack),arg_count);

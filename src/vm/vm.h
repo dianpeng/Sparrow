@@ -1,9 +1,9 @@
 #ifndef VM_H_
 #define VM_H_
-#include "object.h"
-#include "bc.h"
-#include "debug.h"
-#include "util.h"
+#include <vm/object.h>
+#include <vm/bc.h>
+#include <shared/debug.h>
+#include <shared/util.h>
 
 /* Currently we don't support multiple threads */
 #define SIZE_OF_THREADS 1

@@ -1,4 +1,4 @@
-#include "map.h"
+#include <vm/map.h>
 #include <stdlib.h>
 
 static void insert( struct ObjMap* map , struct ObjStr* key , Value val );

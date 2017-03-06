@@ -3,7 +3,7 @@
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdio.h>
-#include "util.h"
+#include <shared/util.h>
 
 /* Bytecode
  * We have a *none-fixed* length bytecode configuration. Each bytecode

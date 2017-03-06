@@ -2,10 +2,12 @@
 #define OBJECT_H_
 #include <stddef.h>
 #include <errno.h>
-#include "../conf.h"
-#include "debug.h"
-#include "util.h"
-#include "bc.h"
+
+#include <sparrow.h>
+#include <vm/bc.h>
+
+#include <shared/debug.h>
+#include <shared/util.h>
 
 struct Sparrow;
 struct ObjModule;

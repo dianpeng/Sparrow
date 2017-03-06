@@ -3,10 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include "error.h"
-#include "object.h"
-#include "vm.h"
-#include "util.h"
+#include <shared/util.h>
+#include <vm/error.h>
+#include <vm/object.h>
+#include <vm/vm.h>
 
 #define BUILTIN_CHECK_ARGUMENT(...) \
   do { \

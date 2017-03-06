@@ -1,12 +1,11 @@
-#include "object.h"
-#include "list.h"
-#include "map.h"
-#include "vm.h"
-#include "gc.h"
-#include "error.h"
-#include "builtin.h"
-#include "lexer.h"
-#include "util.h"
+#include <vm/object.h>
+#include <vm/list.h>
+#include <vm/map.h>
+#include <vm/vm.h>
+#include <vm/gc.h>
+#include <vm/error.h>
+#include <vm/builtin.h>
+#include <vm/lexer.h>
 
 #define __(A,B,C) const char* MetaOpsName_##B = (C);
 

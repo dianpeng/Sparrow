@@ -1,7 +1,7 @@
 #ifndef MAP_H_
 #define MAP_H_
-#include "../conf.h"
-#include "object.h"
+#include <sparrow.h>
+#include <vm/object.h>
 
 static SPARROW_INLINE
 void ObjMapInit( struct ObjMap* map , size_t capacity ) {

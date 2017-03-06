@@ -5,13 +5,13 @@
 #include <limits.h>
 
 #if defined(__GNUC__) || defined(__clang__)
+
 /* Likely unlikely stuff for static branch predication.
  * Right now it is nearly useless for most of the new
  * architecture since they all only supports dynamic predication.
  * But it forces compiler to generate code in a certain order */
-#define SP_LIKELY(X) __builtin_expect((X),1)
-#define SP_UNLIKELY(X) __builtin_expect((X),0)
-
+#define SPARROW_LIKELY(X) __builtin_expect((X),1)
+#define SPARROW_UNLIKELY(X) __builtin_expect((X),0)
 /* Inline flag , mostly used to help when we port to some sick
  * compiler suit like MSVC or older version of c */
 #define SPARROW_INLINE inline

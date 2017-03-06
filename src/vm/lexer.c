@@ -1,5 +1,5 @@
-#include "lexer.h"
-#include "debug.h"
+#include <vm/lexer.h>
+#include <shared/debug.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <errno.h>

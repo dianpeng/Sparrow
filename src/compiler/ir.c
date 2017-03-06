@@ -1,16 +1,16 @@
-#include "ir.h"
+#include <compiler/ir.h>
 #include <math.h>
 
 /* Linked list related stuff */
 #define link_node( GRAPH , IRNODE , ELEMENT , TYPE ) \
   do { \
-    struct IrUse* use = ArenaAllocatorAlloc(((GRAPH)->arena),sizeof(*use)); \
-    struct IrUse* tail = (struct IrUse*)(&(IRNODE)->TYPE##_tail); \
-    use->node = (ELEMENT); \
-    use->prev = tail->prev; \
-    tail->prev->next = use; \
-    tail->prev = use; \
-    use->next = tail; \
+    struct IrUse* use_node = ArenaAllocatorAlloc(((GRAPH)->arena),sizeof(*use_node)); \
+    struct IrUse* tail_node  = (struct IrUse*)(&(IRNODE)->TYPE##_tail); \
+    use_node->node = (ELEMENT); \
+    use_node->prev = tail_node->prev; \
+    tail_node->prev->next = use_node; \
+    tail_node->prev = use_node; \
+    use_node->next = tail_node; \
     ++((IRNODE)->TYPE##_size); \
   } while(0)
 
@@ -36,20 +36,36 @@ const char* IrGetName( int opcode ) {
   switch(opcode) {
     ALL_IRS(__)
     default: return NULL;
-#undef __
+#undef __ /* __ */
   }
 }
 
 static void
 add_region( struct IrGraph* graph , struct IrNode* region , struct IrNode* node ) {
   SPARROW_ASSERT(IrIsControl(region->op));
+  SPARROW_ASSERT(node->bounded == 0);
   IrNodeAddInput(graph,region,node);
+  node->bounded = 1;
+}
+
+static void
+remove_region( struct IrNode* region , struct IrNode* node ) {
+  if(node->bounded == 1) {
+    SPARROW_ASSERT(IrIsControl(region->op));
+    SPARROW_ASSERT(IrNodeHasEffect(node));
+    {
+      struct IrUse* use = IrNodeFindInput(region,node);
+      SPARROW_ASSERT(use);
+      remove_node(node,use,input);
+    }
+    node->bounded = 0;
+  }
 }
 
 static void add_def_use( struct IrGraph* graph ,
                          struct IrNode* use ,
                          struct IrNode* def ) {
-  SPARROW_ASSERT( node->input_max < 0 || node->input_size < node->input_max );
+  SPARROW_ASSERT( use->input_max < 0 || use->input_size < use->input_max );
   /* Add the def to Use-Def chain , which is the input chain */
   link_node(graph,use,def,input);
   /* Add the use to Def-Use chain , which is the output chain */
@@ -112,6 +128,7 @@ static struct IrNode* new_node( struct IrGraph* graph , int op ,
   bin->op = op;
   bin->effect = effect;
   bin->prop_effect = prop_effect;
+  bin->bounded = 0;
   bin->mark_state = 0;
   bin->id = graph->node_id++;
   bin->input_max = input_max;
@@ -136,6 +153,9 @@ struct IrNode* IrNodeNewBinary( struct IrGraph* graph , int op , struct IrNode* 
   add_def_use(graph,bin,left);
   add_def_use(graph,bin,right);
 
+  remove_region(region,left);
+  remove_region(region,right);
+
   if(IrNodeHasEffect(bin)) {
     add_region(graph,region,bin);
   }
@@ -153,7 +173,11 @@ struct IrNode* IrNodeNewUnary( struct IrGraph* graph , int op , struct IrNode* o
                        1,
                        -1,
                        0);
+
   add_def_use(graph,bin,operand);
+
+  remove_region(region,operand);
+
   if(IrNodeHasEffect(bin)) {
     add_region(graph,region,bin);
   }
@@ -173,9 +197,6 @@ struct IrNode* new_number_node( struct IrGraph* graph , double num ) {
     case IR_CONST_INT64:
       size = 8;
       break;
-    case IR_CONST_REAL32:
-      size = 4;
-      break;
     case IR_CONST_REAL64:
       size = 8;
       break;
@@ -183,12 +204,7 @@ struct IrNode* new_number_node( struct IrGraph* graph , double num ) {
       SPARROW_UNREACHABLE(); return NULL;
   }
 
-  bin = new_node(graph,op,
-                        0,
-                        0,
-                        0,
-                        -1,
-                        size);
+  bin = new_node(graph,op, 0, 0, 0, -1, size);
 
   switch(op) {
     case IR_CONST_INT32:
@@ -196,9 +212,6 @@ struct IrNode* new_number_node( struct IrGraph* graph , double num ) {
       break;
     case IR_CONST_INT64:
       *IRNODE_GET_DATA(bin,int64_t*) = (int64_t)(num);
-      break;
-    case IR_CONST_REAL32:
-      *IRNODE_GET_DATA(bin,float*) = (float)(num);
       break;
     case IR_CONST_REAL64:
       *IRNODE_GET_DATA(bin,double*)= num;
@@ -244,15 +257,17 @@ struct IrNode* IrNodeNewList( struct IrGraph* graph ) {
 }
 
 void IrNodeListAddArgument( struct IrGraph* graph , struct IrNode* list ,
-                                                    struct IrNode* argument ) {
+                                                    struct IrNode* argument ,
+                                                    struct IrNode* region ) {
   add_def_use(graph,list,argument);
   list->prop_effect = IrNodeHasEffect(argument);
+  remove_region(region,argument);
 }
 
 void IrNodeListSetRegion( struct IrGraph* graph , struct IrNode* list ,
-                                                  struct IrNode* argument ) {
+                                                  struct IrNode* region ) {
   if(IrNodeHasEffect(list)) {
-    add_region(graph,list,argument);
+    add_region(graph,list,region);
   }
 }
 
@@ -262,7 +277,8 @@ struct IrNode* IrNodeNewMap( struct IrGraph* graph ) {
 
 void IrNodeMapAddArgument( struct IrGraph* graph , struct IrNode* map ,
                                                    struct IrNode* key ,
-                                                   struct IrNode* val ) {
+                                                   struct IrNode* val ,
+                                                   struct IrNode* region ) {
   struct IrNode* pair;
   pair = new_node( graph , IR_PRIMITIVE_PAIR , 0 ,
                                                IrNodeHasEffect(key) || IrNodeHasEffect(val),
@@ -273,6 +289,8 @@ void IrNodeMapAddArgument( struct IrGraph* graph , struct IrNode* map ,
   add_def_use(graph,pair,key);
   add_def_use(graph,pair,val);
   add_def_use(graph,map,pair);
+  remove_region(region,key);
+  remove_region(region,val);
 }
 
 void IrNodeMapSetRegion( struct IrGraph* graph , struct IrNode* map ,
@@ -318,7 +336,9 @@ struct IrNode* IrNodeNewArgument(struct IrGraph* graph , uint32_t index ) {
 }
 
 void IrNodeCallAddArg( struct IrGraph* graph , struct IrNode* call ,
-                                               struct IrNode* arg ) {
+                                               struct IrNode* arg  ,
+                                               struct IrNode* region ) {
+  remove_region(region,arg);
   IrNodeAddInput(graph,call,arg);
 }
 
@@ -340,6 +360,8 @@ struct IrNode* IrNodeNewAGet( struct IrGraph* graph , struct IrNode* tos,
   struct IrNode* bin = new_node(graph,IR_H_AGET,1,0,2,-1,0);
   add_def_use(graph,bin,tos);
   add_def_use(graph,bin,component);
+  remove_region(region,tos);
+  remove_region(region,component);
   add_region(graph,region,bin);
   return bin;
 }
@@ -352,6 +374,9 @@ struct IrNode* IrNodeNewASet( struct IrGraph* graph , struct IrNode* tos,
   add_def_use(graph,bin,tos);
   add_def_use(graph,bin,component);
   add_def_use(graph,bin,value);
+  remove_region(region,tos);
+  remove_region(region,component);
+  remove_region(region,value);
   add_region(graph,region,bin);
   return bin;
 }
@@ -363,6 +388,7 @@ struct IrNode* IrNodeNewAGetIntrinsic( struct IrGraph* graph , struct IrNode* to
                                                                 sizeof(enum IntrinsicAttribute));
   add_def_use(graph,bin,tos);
   *IRNODE_GET_DATA(bin,enum IntrinsicAttribute*) = attr;
+  remove_region(region,tos);
   add_region(graph,region,bin);
   return bin;
 }
@@ -376,6 +402,8 @@ struct IrNode* IrNodeNewASetIntrinsic( struct IrGraph* graph , struct IrNode* to
   add_def_use(graph,bin,tos);
   add_def_use(graph,bin,value);
   *IRNODE_GET_DATA(bin,enum IntrinsicAttribute*) = attr;
+  remove_region(region,tos);
+  remove_region(region,value);
   add_region(graph,region,bin);
   return bin;
 }
@@ -394,6 +422,7 @@ struct IrNode* IrNodeNewUSet( struct IrGraph* graph , uint32_t index ,
   struct IrNode* bin = new_node(graph , IR_H_USET , 1 , 0 , 1 , 0 , sizeof(uint32_t));
   *IRNODE_GET_DATA(bin,uint32_t*) = index;
   add_def_use(graph,bin,value);
+  remove_region(region,value);
   add_region(graph,region,bin);
   return bin;
 }
@@ -465,6 +494,7 @@ struct IrNode* IrNodeNewIterTest( struct IrGraph* graph , struct IrNode* value ,
                                                            -1 ,
                                                            0 );
   add_def_use(graph,node,value);
+  remove_region(region,value);
   add_region(graph,region,node);
   return node;
 }
@@ -477,6 +507,7 @@ struct IrNode* IrNodeNewIterNew ( struct IrGraph* graph , struct IrNode* value ,
                                                           -1 ,
                                                           0 );
   add_def_use(graph,node,value);
+  remove_region(region,value);
   add_region(graph,region,node);
   return node;
 }
@@ -489,17 +520,26 @@ struct IrNode* IrNodeNewIterDrefKey( struct IrGraph* graph , struct IrNode* iter
                                                           -1,
                                                           0);
   add_def_use(graph,node,iter);
+  remove_region(region,iter);
   add_region(graph,region,node);
   return node;
 }
 
 /* Misc ================================== */
 struct IrNode* IrNodeNewPhi( struct IrGraph* graph , struct IrNode* left ,
-                                                     struct IrNode* right ) {
-  struct IrNode* node = new_node( graph , IR_PHI , 0 , 0 , 2 , -1 , 0 );
+                                                     struct IrNode* right,
+                                                     struct IrNode* region ) {
+  struct IrNode* node = new_node( graph , IR_PHI , 0 ,
+                                                   IrNodeHasEffect(left) || IrNodeHasEffect(right) ,
+                                                   2 ,
+                                                   -1,
+                                                   0 );
   /* order matters !!! */
   add_def_use(graph,node,left);
   add_def_use(graph,node,right);
+  remove_region(region,left);
+  remove_region(region,right);
+  if(IrNodeHasEffect(node)) add_region(graph,region,node);
   return node;
 }
 

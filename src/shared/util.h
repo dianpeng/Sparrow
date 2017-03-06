@@ -1,7 +1,7 @@
 #ifndef UTIL_H_
 #define UTIL_H_
-#include "../conf.h"
-#include "debug.h"
+#include <sparrow.h>
+#include <shared/debug.h>
 
 #include <stdio.h>
 #include <stddef.h>

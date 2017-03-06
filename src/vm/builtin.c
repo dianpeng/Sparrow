@@ -1,10 +1,10 @@
-#include "builtin.h"
-#include "bc.h"
-#include "list.h"
-#include "map.h"
-#include "gc.h"
-#include "loader.h"
-#include "debug.h"
+#include <vm/builtin.h>
+#include <vm/bc.h>
+#include <vm/list.h>
+#include <vm/map.h>
+#include <vm/gc.h>
+#include <vm/loader.h>
+#include <shared/debug.h>
 
 #include <sys/time.h>
 #include <limits.h>

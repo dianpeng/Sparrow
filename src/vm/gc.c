@@ -1,8 +1,8 @@
-#include "gc.h"
-#include "object.h"
-#include "list.h"
-#include "map.h"
-#include "vm.h"
+#include <vm/gc.h>
+#include <vm/object.h>
+#include <vm/list.h>
+#include <vm/map.h>
+#include <vm/vm.h>
 
 static void destroy_proto( struct ObjProto* cls ) {
   CodeBufferDestroy(&(cls->code_buf));

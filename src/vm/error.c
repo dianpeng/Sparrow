@@ -1,4 +1,5 @@
-#include "error.h"
+#include <vm/error.h>
+
 void ReportErrorV( struct StrBuf* buf , const char* spath ,
     size_t line , size_t ccnt ,
     const char* fmt , va_list vl ) {

@@ -1,10 +1,11 @@
 #ifndef IR_H_
 #define IR_H_
-#include "../conf.h"
-#include "../vm/util.h"
-#include "../vm/bc.h"
-#include "../vm/object.h"
-#include "../vm/debug.h"
+#include <sparrow.h>
+#include <vm/util.h>
+#include <vm/bc.h>
+#include <vm/object.h>
+#include <vm/debug.h>
+#include <compiler/arch.h>
 
 struct IrNode;
 struct IrLink;
@@ -70,7 +71,6 @@ struct IrGraph;
 #define CONSTANT_IR_LIST(X) \
   X(CONST_INT32,"const_int32") \
   X(CONST_INT64,"const_int64") \
-  X(CONST_REAL32,"const_real32") \
   X(CONST_REAL64,"const_real64") \
   X(CONST_STRING,"const_string") \
   X(CONST_BOOLEAN,"const_boolean") \
@@ -223,7 +223,24 @@ static SPARROW_INLINE int IrIsHighIrUnary (int opcode) {
 
 const char* IrGetName( int opcode );
 
-static SPARROW_INLINE int IrNumberGetType(double number);
+static SPARROW_INLINE int IrNumberGetType(double number) {
+  double intpart;
+  double rest = modf(number,&intpart);
+  if(rest == 0.0) {
+    /* Treat it as an integer and see which range it falls into */
+    if(intpart > (double)SPARROW_INT64_MAX || intpart < (double)SPARROW_INT64_MIN)
+      return IR_CONST_REAL64;
+    else {
+      int64_t intval = (int64_t)intpart; /* No overflow */
+      if(intval > SPARROW_INT32_MAX || intval < SPARROW_INT32_MIN)
+        return IR_CONST_INT64;
+      else
+        return IR_CONST_INT32;
+    }
+  } else {
+    return IR_CONST_REAL64;
+  }
+}
 
 /* IrUse. A use structure represents the def-use/use-def chain element. Since
  * the chain will be modified during IrGraph construction. We use a double
@@ -284,6 +301,11 @@ struct IrNode {
                               * its operand has prop_effect or effect bit set.
                               */
 
+  uint16_t bounded: 1;       /* Whether this IrNode is bounded to a certain CF
+                              * node or not. It is a helper bit to optimize remove
+                              * operation on this node when this node is used by
+                              * multiple expressions */
+
   uint16_t mark_state:2 ;    /* 2 bits mark state for traversal of the graph */
 
   uint32_t id;               /* Ir Unique ID . User could use it to index to
@@ -302,21 +324,20 @@ struct IrNode {
   struct IrUseBase output_tail;
   int output_size;
   int output_max ;
-
-  /* Your customized data goes right after here */
 };
 
 #define IrNodeHasEffect(IRNODE) ((IRNODE)->effect || (IRNODE)->prop_effect)
 
 #define IrNodeGetData(IRNODE) (((char*)(IRNODE))+sizeof(*IRNODE))
 
-/* Low level add input/output function. It won't take care of effect bit settings */
-
-/* The input and output chain
+/* Low level add input/output function. It won't take care of effect bit settings
+ *
+ * General use case for input/output chain
  *
  * 1) For control flow node , the output chain is used to represent the node's
  * control flow ; the input chain is used to represent the statement that is
  * related to this control flow node.
+ *
  * 2) For none control flow node , the output node defines the def-use chains;
  * and the input node defines the use-def chains.
  */
@@ -370,18 +391,20 @@ struct IrNode* IrNodeNewList( struct IrGraph* );
  * following functions which takes care of the effect */
 void IrNodeListAddArgument( struct IrGraph* ,
                             struct IrNode*  ,
-                            struct IrNode*  );
+                            struct IrNode*  ,
+                            struct IrNode* );
 
 void IrNodeListSetRegion  ( struct IrGraph* ,
                             struct IrNode*  ,
-                            struct IrNode* );
+                            struct IrNode*  );
 
 struct IrNode* IrNodeNewMap( struct IrGraph* );
 
 void IrNodeMapAddArgument( struct IrGraph* ,
                            struct IrNode* map ,
                            struct IrNode* key ,
-                           struct IrNode* val );
+                           struct IrNode* val ,
+                           struct IrNode* region );
 
 void IrNodeMapSetRegion  ( struct IrGraph* ,
                            struct IrNode* ,
@@ -415,7 +438,8 @@ struct IrNode* IrNodeNewCall( struct IrGraph* , struct IrNode* function ,
                                                 struct IrNode* region );
 
 void IrNodeCallAddArg( struct IrGraph* , struct IrNode* call ,
-                                                struct IrNode* arg );
+                                         struct IrNode* arg  ,
+                                         struct IrNode* region );
 
 struct IrNode* IrNodeNewCallIntrinsic( struct IrGraph* , enum IntrinsicFunction func ,
                                                          struct IrNode* region );
@@ -489,6 +513,7 @@ struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewLoop(struct IrGraph* , struct IrNode* pred );
 struct IrNode* IrNodeNewLoopExit(struct IrGraph* , struct IrNode* pred );
+
 /* This function will link the Return node to end node in IrGraph automatically */
 struct IrNode* IrNodeNewReturn(struct IrGraph* ,
                                struct IrNode* value ,
@@ -500,7 +525,9 @@ struct IrNode* IrNodeNewIterNew (struct IrGraph*, struct IrNode* value, struct I
 struct IrNode* IrNodeNewIterDref(struct IrGraph* , struct IrNode* , struct IrNode* );
 
 /* Misc */
-struct IrNode* IrNodeNewPhi( struct IrGraph* , struct IrNode* left , struct IrNode* right );
+struct IrNode* IrNodeNewPhi( struct IrGraph* , struct IrNode* left ,
+                                               struct IrNode* right ,
+                                               struct IrNode* region );
 
 struct IrNode* IrNodeNewProjection( struct IrGraph* , struct IrNode* target ,
                                                       uint32_t index ,

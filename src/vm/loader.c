@@ -1,8 +1,8 @@
-#include "loader.h"
-#include "object.h"
-#include "parser.h"
-#include "vm.h"
-#include "util.h"
+#include <vm/loader.h>
+#include <vm/object.h>
+#include <vm/parser.h>
+#include <vm/vm.h>
+#include <shared/util.h>
 
 static int run_code( struct Sparrow* sparrow , const char* fpath ,
     const char* source , struct ObjMap* env , Value* ret ,

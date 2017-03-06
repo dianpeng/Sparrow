@@ -1,10 +1,11 @@
-#include "parser.h"
-#include "lexer.h"
-#include "object.h"
-#include "error.h"
-#include "bc.h"
-#include "util.h"
-#include "debug.h"
+#include <vm/parser.h>
+#include <vm/lexer.h>
+#include <vm/object.h>
+#include <vm/error.h>
+#include <vm/bc.h>
+
+#include <shared/util.h>
+#include <shared/debug.h>
 
 #include <stdarg.h>
 #include <stddef.h>

@@ -1,5 +1,5 @@
-#include "bc.h"
-#include "debug.h"
+#include <vm/bc.h>
+#include <shared/debug.h>
 
 #define __(A,B,C) C,
 static int DEBUG_TABLE[SIZE_OF_BYTECODE+1] = {

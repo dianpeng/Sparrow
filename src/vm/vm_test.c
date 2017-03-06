@@ -1,9 +1,9 @@
-#include "vm.h"
-#include "parser.h"
-#include "object.h"
-#include "list.h"
-#include "map.h"
-#include "util.h"
+#include <vm/vm.h>
+#include <vm/parser.h>
+#include <vm/object.h>
+#include <vm/list.h>
+#include <vm/map.h>
+#include <shared/util.h>
 
 #include <sys/time.h>
 #include <inttypes.h>

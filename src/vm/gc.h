@@ -1,8 +1,8 @@
 #ifndef GC_H_
 #define GC_H_
-#include "../conf.h"
-#include "object.h"
 #include <stdio.h>
+#include <sparrow.h>
+#include <vm/object.h>
 
 /* We just have a stop-the-world GC, but have a good trigger mechanism . In
  * generaly , the GC is teaked to avoid potential useless GC try. A useless
