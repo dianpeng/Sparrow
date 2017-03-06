@@ -180,7 +180,7 @@ struct ObjClosure* ObjNewClosureNoGC( struct Sparrow* sth ,
     struct ObjProto* proto ) {
   struct ObjClosure* cls = malloc(
       sizeof(*cls)+sizeof(Value)*proto->uv_size);
-  UNUSE_ARG(sth);
+  SPARROW_UNUSE_ARG(sth);
   cls->proto = proto;
   cls->upval = (Value*)((char*)cls + sizeof(struct ObjClosure));
   add_gcobject(sth,cls,VALUE_CLOSURE);
@@ -554,7 +554,7 @@ static void global_env_init( struct Sparrow* sparrow ,
 
 #define ADD(NAME,FUNC) \
   do { \
-    struct ObjStr* name = ObjNewStrNoGC(sparrow,#NAME,STRING_SIZE(#NAME)); \
+    struct ObjStr* name = ObjNewStrNoGC(sparrow,#NAME,SPARROW_STRING_SIZE(#NAME)); \
     struct ObjUdata* udata = FUNC(sparrow); \
     Value v; \
     Vset_udata(&v,udata); \
@@ -636,7 +636,7 @@ void SparrowInit( struct Sparrow* sth ) {
   /* Initialize global builtin function name lists */
 #define __(A,B,C) \
   do { \
-    sth->BuiltinFuncName_##B = ObjNewStr(sth,C,STRING_SIZE(C)); \
+    sth->BuiltinFuncName_##B = ObjNewStr(sth,C,SPARROW_STRING_SIZE(C)); \
   } while(0);
 
   INTRINSIC_FUNCTION(__)
@@ -646,7 +646,7 @@ void SparrowInit( struct Sparrow* sth ) {
   /* Initialize intrinsic attribute name lists */
 #define __(A,B) \
     do { \
-      sth->IAttrName_##A = ObjNewStr(sth,B,STRING_SIZE(B)); \
+      sth->IAttrName_##A = ObjNewStr(sth,B,SPARROW_STRING_SIZE(B)); \
     } while(0);
 
   INTRINSIC_ATTRIBUTE(__)
@@ -809,7 +809,7 @@ struct ObjStr* ObjNewStrFromChar( struct Sparrow* sth,
 static int
 str_iter_has_next( struct Sparrow* sth ,
     struct ObjIterator* itr ) {
-  UNUSE_ARG(sth);
+  SPARROW_UNUSE_ARG(sth);
   struct ObjStr* str = Vget_str(&(itr->obj));
   if( (size_t)itr->u.index >= str->len )
     return -1;
@@ -830,7 +830,7 @@ str_iter_deref( struct Sparrow* sth ,
 
 static void
 str_iter_move( struct Sparrow* sth , struct ObjIterator* itr ) {
-  UNUSE_ARG(sth);
+  SPARROW_UNUSE_ARG(sth);
   ++itr->u.index;
 }
 

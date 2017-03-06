@@ -120,44 +120,44 @@ void Builtin_MSec( struct Runtime* rt , Value* ret , int* fail ) {
 }
 
 void Builtin_Min( struct Runtime* rt , Value* v , int* f ) {
-  UNUSE_ARG(rt);
-  UNUSE_ARG(v);
-  UNUSE_ARG(f);
+  SPARROW_UNUSE_ARG(rt);
+  SPARROW_UNUSE_ARG(v);
+  SPARROW_UNUSE_ARG(f);
   SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Max( struct Runtime* rt , Value* v , int* f ) {
-  UNUSE_ARG(rt);
-  UNUSE_ARG(v);
-  UNUSE_ARG(f);
+  SPARROW_UNUSE_ARG(rt);
+  SPARROW_UNUSE_ARG(v);
+  SPARROW_UNUSE_ARG(f);
   SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Sort(struct Runtime* rt , Value* v , int* f ) {
-  UNUSE_ARG(rt);
-  UNUSE_ARG(v);
-  UNUSE_ARG(f);
+  SPARROW_UNUSE_ARG(rt);
+  SPARROW_UNUSE_ARG(v);
+  SPARROW_UNUSE_ARG(f);
   SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Set( struct Runtime* rt , Value* v , int* f ) {
-  UNUSE_ARG(rt);
-  UNUSE_ARG(v);
-  UNUSE_ARG(f);
+  SPARROW_UNUSE_ARG(rt);
+  SPARROW_UNUSE_ARG(v);
+  SPARROW_UNUSE_ARG(f);
   SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Get( struct Runtime* rt , Value* v , int* f ) {
-  UNUSE_ARG(rt);
-  UNUSE_ARG(v);
-  UNUSE_ARG(f);
+  SPARROW_UNUSE_ARG(rt);
+  SPARROW_UNUSE_ARG(v);
+  SPARROW_UNUSE_ARG(f);
   SPARROW_UNIMPLEMENTED();
 }
 
 void Builtin_Exist(struct Runtime* rt , Value* v , int* f ){
-  UNUSE_ARG(rt);
-  UNUSE_ARG(v);
-  UNUSE_ARG(f);
+  SPARROW_UNUSE_ARG(rt);
+  SPARROW_UNUSE_ARG(v);
+  SPARROW_UNUSE_ARG(f);
   SPARROW_UNIMPLEMENTED();
 }
 
@@ -212,7 +212,7 @@ static int gvar_dt_Mgeti( struct Sparrow* sparrow , Value udata ,
     enum IntrinsicAttribute iattr , Value* ret ) {
   struct ObjUdata* u = Vget_udata(&udata);
   struct gvar_dt_pri* pri = (struct gvar_dt_pri*)(u->udata);
-  UNUSE_ARG(sparrow);
+  SPARROW_UNUSE_ARG(sparrow);
   *ret = pri->method[iattr];
   return 0;
 }
@@ -790,7 +790,7 @@ static int gc_stat( struct Sparrow* sparrow , Value obj , Value* ret ) {
 #define ADD(X) \
   do { \
     Vset_number(&v,sparrow->gc_##X); \
-    ObjMapPut(map,ObjNewStrNoGC(sparrow,#X,STRING_SIZE(#X)),v); \
+    ObjMapPut(map,ObjNewStrNoGC(sparrow,#X,SPARROW_STRING_SIZE(#X)),v); \
   } while(0)
 
   ADD(generation);
@@ -851,7 +851,8 @@ static int gc_config( struct Sparrow* sparrow , Value obj , Value* ret ) {
 
 struct ObjUdata* GCreateGCUdata( struct Sparrow* sparrow ) {
   struct cmethod_ptr methods[4];
-#define STRING_LEN(X) (X), STRING_SIZE((X))
+
+#define STRING_LEN(X) (X), SPARROW_STRING_SIZE((X))
 
   methods[0].ptr = gc_try;
   methods[0].name = ObjNewStrNoGC(sparrow,STRING_LEN("try"));

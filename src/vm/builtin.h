@@ -31,7 +31,7 @@ static SPARROW_INLINE
 void Builtin_IsBoolean( struct Runtime* rt , Value* ret , int* fail ) {
   BUILTIN_CHECK_ARGUMENT(rt,"is_boolean",1,ARG_ANY) {
     Value obj = RuntimeGetArg(rt,0);
-    UNUSE_ARG(rt);
+    SPARROW_UNUSE_ARG(rt);
     Vset_boolean(ret,Vis_boolean(&obj));
   }
 }
@@ -40,7 +40,7 @@ static SPARROW_INLINE
 void Builtin_IsString( struct Runtime* rt , Value* ret , int* fail ) {
   BUILTIN_CHECK_ARGUMENT(rt,"is_string",1,ARG_ANY) {
     Value obj = RuntimeGetArg(rt,0);
-    UNUSE_ARG(rt);
+    SPARROW_UNUSE_ARG(rt);
     Vset_boolean(ret,Vis_str(&obj));
   }
 }
@@ -49,7 +49,7 @@ static SPARROW_INLINE
 void Builtin_IsNumber( struct Runtime* rt , Value* ret , int* fail ) {
   BUILTIN_CHECK_ARGUMENT(rt,"is_number",1,ARG_ANY) {
     Value obj = RuntimeGetArg(rt,0);
-    UNUSE_ARG(rt);
+    SPARROW_UNUSE_ARG(rt);
     Vset_boolean(ret,Vis_number(&obj));
   }
 }
@@ -58,7 +58,7 @@ static SPARROW_INLINE
 void Builtin_IsNull( struct Runtime* rt , Value* ret , int* fail ) {
   BUILTIN_CHECK_ARGUMENT(rt,"is_null",1,ARG_ANY) {
     Value obj = RuntimeGetArg(rt,0);
-    UNUSE_ARG(rt);
+    SPARROW_UNUSE_ARG(rt);
     Vset_boolean(ret,Vis_null(&obj));
   }
 }
@@ -67,7 +67,7 @@ static SPARROW_INLINE
 void Builtin_IsList( struct Runtime* rt , Value* ret , int* fail ) {
   BUILTIN_CHECK_ARGUMENT(rt,"is_list",1,ARG_ANY) {
     Value obj = RuntimeGetArg(rt,0);
-    UNUSE_ARG(rt);
+    SPARROW_UNUSE_ARG(rt);
     Vset_boolean(ret,Vis_list(&obj));
   }
 }
@@ -76,7 +76,7 @@ static SPARROW_INLINE
 void Builtin_IsMap( struct Runtime* rt , Value* ret , int* fail ) {
   BUILTIN_CHECK_ARGUMENT(rt,"is_map",1,ARG_ANY) {
     Value obj = RuntimeGetArg(rt,0);
-    UNUSE_ARG(rt);
+    SPARROW_UNUSE_ARG(rt);
     Vset_boolean(ret,Vis_map(&obj));
   }
 }
@@ -85,7 +85,7 @@ static SPARROW_INLINE
 void Builtin_IsClosure( struct Runtime* rt , Value* ret , int* fail ) {
   BUILTIN_CHECK_ARGUMENT(rt,"is_closure",1,ARG_ANY) {
     Value obj = RuntimeGetArg(rt,0);
-    UNUSE_ARG(rt);
+    SPARROW_UNUSE_ARG(rt);
     Vset_boolean(ret,Vis_closure(&obj));
   }
 }

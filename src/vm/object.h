@@ -667,7 +667,7 @@ int ObjStrCmp( const struct ObjStr* left , const struct ObjStr* right ) {
      * may not be null terminated. Just use the raw
      * byte comparison here */
     if(left->len !=  right->len) {
-      size_t l = MIN(left->len,right->len);
+      size_t l = SPARROW_MIN(left->len,right->len);
       int ret = memcmp(left->str,right->str,l);
       if(!ret) {
         if(l == left->len) return -1;
@@ -787,10 +787,10 @@ int MetaOps_size ( Value func , struct Sparrow* sparrow ,
 static SPARROW_INLINE
 int MetaOps_iter ( Value func , struct Sparrow* sparrow ,
     Value object , struct ObjIterator* iterator ) {
-  UNUSE_ARG(func);
-  UNUSE_ARG(sparrow);
-  UNUSE_ARG(object);
-  UNUSE_ARG(iterator);
+  SPARROW_UNUSE_ARG(func);
+  SPARROW_UNUSE_ARG(sparrow);
+  SPARROW_UNUSE_ARG(object);
+  SPARROW_UNUSE_ARG(iterator);
   SPARROW_UNIMPLEMENTED();
   return -1;
 }

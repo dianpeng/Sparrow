@@ -1,5 +1,5 @@
 #define STRING_POOL_SIZE 4
-#include "object.h"
+#include <vm/object.h>
 #include <float.h>
 
 // Mostly test MACROs around Value object

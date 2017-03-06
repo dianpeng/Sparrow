@@ -168,7 +168,7 @@ int ObjMapRemove( struct ObjMap* map , const struct ObjStr* key ,
 static int map_iter_has_next( struct Sparrow* sth ,
     struct ObjIterator* itr ) {
   struct ObjMap* m;
-  UNUSE_ARG(sth);
+  SPARROW_UNUSE_ARG(sth);
   m = Vget_map(&(itr->obj));
   if( (size_t)itr->u.index >= m->cap ) {
     return -1;
@@ -190,7 +190,7 @@ static void map_iter_deref( struct Sparrow* sth ,
     Value* key,
     Value* value ) {
   struct ObjMap* m;
-  UNUSE_ARG(sth);
+  SPARROW_UNUSE_ARG(sth);
   m = Vget_map(&(itr->obj));
   SPARROW_ASSERT((size_t)(itr->u.index) < m->cap);
   SPARROW_ASSERT(m->entry[itr->u.index].used && !m->entry[itr->u.index].del);
@@ -200,7 +200,7 @@ static void map_iter_deref( struct Sparrow* sth ,
 
 static void map_iter_move( struct Sparrow* sth ,
     struct ObjIterator* itr ) {
-  UNUSE_ARG(sth);
+  SPARROW_UNUSE_ARG(sth);
   ++itr->u.index;
 }
 

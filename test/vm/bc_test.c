@@ -1,5 +1,5 @@
 #define CODE_BUFFER_INITIAL_SIZE 24
-#include "bc.h"
+#include <vm/bc.h>
 
 struct check_result {
   int argcount; /* Argument count */

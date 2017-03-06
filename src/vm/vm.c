@@ -350,7 +350,7 @@ Value vm_powvv( struct Runtime* rt , Value l , Value r , int* fail ) {
 static SPARROW_INLINE
 Value vm_not( struct Runtime* rt , Value tos ) {
   Value ret;
-  UNUSE_ARG(rt);
+  SPARROW_UNUSE_ARG(rt);
   Vset_boolean(&ret,!ValueToBoolean(rt,tos));
   return ret;
 }
@@ -358,7 +358,7 @@ Value vm_not( struct Runtime* rt , Value tos ) {
 static SPARROW_INLINE
 Value vm_test( struct Runtime* rt, Value tos ) {
   Value ret;
-  UNUSE_ARG(rt);
+  SPARROW_UNUSE_ARG(rt);
   Vset_boolean(&ret,ValueToBoolean(rt,tos));
   return ret;
 }
@@ -367,7 +367,7 @@ Value vm_test( struct Runtime* rt, Value tos ) {
   static SPARROW_INLINE \
   Value vm_##INSTR( struct Runtime* rt, Value l, Value r, int* fail ) { \
     Value ret; \
-    UNUSE_ARG(rt); \
+    SPARROW_UNUSE_ARG(rt); \
     double ln,rn; \
     Vset_null(&ret); \
     ln = ValueConvNumber(l,fail); \

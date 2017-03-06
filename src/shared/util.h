@@ -14,26 +14,6 @@
 #define MEMORY_INITIAL_OBJ_SIZE 16
 #define MEMORY_MAX_OBJ_SIZE 2048
 
-#ifndef MAX
-#define MAX(A,B) ((A) > (B) ? (A) : (B))
-#endif /* MAX */
-
-#ifndef MIN
-#define MIN(A,B) ((A) < (B) ? (A) : (B))
-#endif /* MIN */
-
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(X) ((sizeof(X) /sizeof(X[0])))
-#endif /* ARRAY_SIZE */
-
-#ifndef STRING_SIZE
-#define STRING_SIZE(X) (ARRAY_SIZE(X)-1)
-#endif /* STRING_SIZE */
-
-#ifndef UNUSE_ARG
-#define UNUSE_ARG(X) (void)(X)
-#endif /* UNUSE_ARG */
-
 static SPARROW_INLINE
 size_t NextPowerOf2Size(size_t v) {
   v--;

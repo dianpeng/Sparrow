@@ -20,7 +20,7 @@ static void destroy_proto( struct ObjProto* cls ) {
 
 /* Real routine that *deletes* resource based on GC object's type */
 void GCFinalizeObj( struct Sparrow* sth, struct GCRef* obj ) {
-  UNUSE_ARG(sth);
+  SPARROW_UNUSE_ARG(sth);
   switch(obj->gtype) {
     case VALUE_STRING:
       free(obj);

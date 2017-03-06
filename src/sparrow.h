@@ -60,4 +60,14 @@
 #define SPARROW_STATIC_ASSERT(COND,MSG) \
   typedef char static_assert_##MSG[(COND)?1:-1]
 
+#define SPARROW_MAX(A,B) ((A) > (B) ? (A) : (B))
+
+#define SPARROW_MIN(A,B) ((A) < (B) ? (A) : (B))
+
+#define SPARROW_ARRAY_SIZE(X) ((sizeof(X) /sizeof(X[0])))
+
+#define SPARROW_STRING_SIZE(X) (SPARROW_ARRAY_SIZE(X)-1)
+
+#define SPARROW_UNUSE_ARG(X) (void)(X)
+
 #endif /* CONF_H_ */

@@ -1,6 +1,6 @@
-#include "parser.h"
-#include "bc.h"
-#include "object.h"
+#include <vm/parser.h>
+#include <vm/bc.h>
+#include <vm/object.h>
 #include <stdlib.h>
 
 #define STRINGIFY(...) #__VA_ARGS__

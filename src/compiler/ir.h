@@ -306,11 +306,11 @@ struct IrNode {
                               * operation on this node when this node is used by
                               * multiple expressions */
 
-  uint16_t mark_state:2 ;    /* 2 bits mark state for traversal of the graph */
-
   uint32_t id;               /* Ir Unique ID . User could use it to index to
                               * a side array for associating information that
                               * is local to a certain optimization pass */
+
+  uint32_t mark;             /* Marking states */
 
   /* The following use-def and def-use chain's memory is owned by the Arena
    * allocator inside of the IrGrpah */
@@ -389,37 +389,24 @@ struct IrNode* IrNodeNewList( struct IrGraph* );
 
 /* For adding input into List/Map , do not use IrNodeAddInput/Output, but use
  * following functions which takes care of the effect */
-void IrNodeListAddArgument( struct IrGraph* ,
-                            struct IrNode*  ,
-                            struct IrNode*  ,
-                            struct IrNode* );
+void IrNodeListAddArgument( struct IrGraph* , struct IrNode*  , struct IrNode*  , struct IrNode* );
 
-void IrNodeListSetRegion  ( struct IrGraph* ,
-                            struct IrNode*  ,
-                            struct IrNode*  );
+void IrNodeListSetRegion  ( struct IrGraph* , struct IrNode*  , struct IrNode*  );
 
 struct IrNode* IrNodeNewMap( struct IrGraph* );
 
-void IrNodeMapAddArgument( struct IrGraph* ,
-                           struct IrNode* map ,
-                           struct IrNode* key ,
-                           struct IrNode* val ,
-                           struct IrNode* region );
+void IrNodeMapAddArgument( struct IrGraph* , struct IrNode* map , struct IrNode* key ,
+                                                                  struct IrNode* val ,
+                                                                  struct IrNode* region );
 
-void IrNodeMapSetRegion  ( struct IrGraph* ,
-                           struct IrNode* ,
-                           struct IrNode* );
+void IrNodeMapSetRegion  ( struct IrGraph* , struct IrNode* , struct IrNode* ); 
 
 /* A loaded closure is always no effect and not impcated by its upvalue */
 struct IrNode* IrNodeNewClosure( struct IrGraph* , const struct ObjProto* , size_t upcnt );
 
-void IrNodeClosureAddUpvalueEmbed(struct IrGraph* ,
-                                  struct IrNode* ,
-                                  struct IrNode* );
+void IrNodeClosureAddUpvalueEmbed(struct IrGraph* , struct IrNode* , struct IrNode* );
 
-void IrNodeClosureAddUpvalueDetach(struct IrGraph* ,
-                                   struct IrNode*  ,
-                                   uint32_t index );
+void IrNodeClosureAddUpvalueDetach(struct IrGraph* , struct IrNode*  , uint32_t index );
 
 static SPARROW_INLINE
 uint32_t IrNodeUpvalueDetachGetIndex( struct IrNode* node ) {
@@ -548,7 +535,22 @@ struct IrGraph {
   uint32_t node_id;            /* Current node ID */
   struct IrNode* start;        /* Start of the Node */
   struct IrNode* end  ;        /* End of the Node */
+  uint32_t clean_state;        /* The current value for clean state of visiting
+                                * the graph's node */
 };
+
+/* For DFS tri-color visiting usage. The mark filed in IrNode will be growing
+ * monolithically. The previous visiting of Black will become next iteration of
+ * visiting's whtie . Then we don't need to reset the mark field after we finish
+ * visiting the graph. */
+#define IrGraphWhiteMark(IRGRAPH) ((IRGRAPH)->clean_state)
+#define IrGraphBlackMark(IRGRAPH) ((IRGRAPH)->clean_state+2)
+#define IrGraphGrayMark(IRGRAPH) ((IRGRAPH)->clean_state+1)
+
+static SPARROW_INLINE void IrGraphBumpCleanState( struct IrGraph* graph ) {
+  /* unsigned integer's overflow is well defined */
+  (graph)->clean_state += 2;
+}
 
 /* Initialize a IrGraph object with regards to a specific protocol object */
 void IrGraphInit( struct IrGraph* , const struct ObjModule* module ,

@@ -1,4 +1,4 @@
-#include "util.h"
+#include <shared/util.h>
 
 #define STRING(X) X , ARRAY_SIZE(X)-1
 #define STRLEN(X) (ARRAY_SIZE(X)-1)

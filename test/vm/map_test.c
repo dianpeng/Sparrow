@@ -1,4 +1,4 @@
-#include "map.h"
+#include <vm/map.h>
 #include <stdlib.h>
 
 /* THIS TEST FILE IS TOTALLY DEPERACTED, WE NEED A *REWRITE* */

@@ -1,4 +1,4 @@
-#include "list.h"
+#include <vm/list.h>
 #include <stdlib.h>
 
 static void test_list_basic() {
