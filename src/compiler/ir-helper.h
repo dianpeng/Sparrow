@@ -1,5 +1,6 @@
 #ifndef IR_HELPER_H_
 #define IR_HELPER_H_
+
 struct IrGraph;
 struct StrBuf;
 

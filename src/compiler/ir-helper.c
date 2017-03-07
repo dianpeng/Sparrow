@@ -33,6 +33,9 @@ static SPARROW_INLINE void print_node( struct DotFormatBuilder* builder ,
       node->effect,
       node->prop_effect,
       node->bounded);
+
+  SPARROW_DUMP(INFO,"%s_%d:%d,%d",opcode_name,node->id,
+                                  node->input_size,node->output_size);
 }
 
 
@@ -58,30 +61,34 @@ static SPARROW_INLINE void print_node_input( struct DotFormatBuilder* builder ,
   {
     struct IrUse* start = IrNodeInputBegin(node);
     struct IrUse* end = IrNodeInputEnd(node);
+    size_t count = 0;
     while( start != end ) {
       print_node_link(builder,node,start->node,style);
       start = start->next;
+      ++count;
     }
+    SPARROW_DUMP(ERROR,"%d",(int)count);
+    // SPARROW_ASSERT(count == node->input_size);
+    (void)count;
   }
 }
 
 static SPARROW_INLINE void print_node_output( struct DotFormatBuilder* builder ,
                                               const struct IrGraph* graph ,
                                               const struct IrNode* node ) {
-  const char* style;
   (void)graph;
   if(IrIsControl(node->op)) {
-    style = "[style=bold]";
-  } else {
-    style = "";
-  }
-  {
     struct IrUse* start = IrNodeOutputBegin(node);
     struct IrUse* end  = IrNodeOutputEnd(node);
+    size_t count = 0;
     while( start != end ) {
-      print_node_link(builder,node,start->node,style);
+      print_node_link(builder,node,start->node,"[style=bold]");
       start = start->next;
+      ++count;
     }
+    SPARROW_DUMP(ERROR,"%d",(int)count);
+    // SPARROW_ASSERT(count == node->output_size);
+    (void)count;
   }
 }
 
@@ -93,8 +100,8 @@ static SPARROW_INLINE void expand_node( struct IrNodeStack* stack ,
     if(begin->node->mark == IrGraphWhiteMark(graph)) {
       IrNodeStackPush(stack,begin->node);
       begin->node->mark = IrGraphGrayMark(graph);
-      begin = begin->next;
     }
+    begin = begin->next;
   }
 }
 
@@ -110,7 +117,7 @@ static SPARROW_INLINE void print_graph ( struct DotFormatBuilder* builder ,
   IrNodeStackInit(&work_set,128);
   AddNode(graph->start);
 
-  StrBufPrintF(builder->output,"digraph G {\n");
+  StrBufPrintF(builder->output,"digraph IrGraph {\n");
 
   while( !IrNodeStackIsEmpty(&work_set) ) {
     struct IrNode* top = IrNodeStackPop(&work_set);
@@ -125,7 +132,9 @@ static SPARROW_INLINE void print_graph ( struct DotFormatBuilder* builder ,
 
     /* expands its sibling nodes */
     expand_node(&work_set,IrNodeInputBegin(top),IrNodeInputEnd(top),graph);
-    expand_node(&work_set,IrNodeOutputBegin(top),IrNodeOutputEnd(top),graph);
+    if(IrIsControl(top->op)) {
+      expand_node(&work_set,IrNodeOutputBegin(top),IrNodeOutputEnd(top),graph);
+    }
   }
 
   StrBufPrintF(builder->output,"}\n");
@@ -140,4 +149,3 @@ int IrGraphToDotFormat( struct StrBuf* buffer , struct IrGraph* graph ) {
   IrGraphBumpCleanState(graph);
   return 0;
 }
-

@@ -1,6 +1,6 @@
 #ifndef ARCH_H_
 #define ARCH_H_
-#include "../conf.h"
+#include <sparrow.h>
 
 #ifndef __x86_64__
 #error "Guys, only support x86-64 now"

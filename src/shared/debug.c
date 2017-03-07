@@ -1,6 +1,7 @@
 #include <shared/debug.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <stdlib.h>
 
 struct logger_context {
   FILE* output;
@@ -55,5 +56,6 @@ int SparrowLoggerAssert( const char* file , int line , const char* expr ,
   vfprintf(LOGGER_CTX.output,format,vl);
   fwrite ("\n",1,1,LOGGER_CTX.output);
   fflush(LOGGER_CTX.output);
+  abort();
   return 0;
 }

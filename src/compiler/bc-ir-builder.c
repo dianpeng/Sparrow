@@ -61,7 +61,7 @@ static void ss_place( struct StackStats* ss ,
 static void ss_clone( const struct StackStats* src , struct StackStats* dest ) {
   dest->stk_size = src->stk_size;
   dest->stk_cap = src->stk_cap;
-  dest->stk_arr = malloc(sizeof(struct IrNode*)*src->stk_size);
+  dest->stk_arr = malloc(sizeof(struct IrNode*)*src->stk_cap);
   memcpy(dest->stk_arr,src->stk_arr,dest->stk_size*sizeof(struct IrNode*));
 }
 
@@ -144,9 +144,9 @@ static void builder_init( struct BytecodeIrBuilder* builder , struct IrGraph* gr
   builder->parent_graph = parent_graph;
 }
 
-static void builder_clone( const struct BytecodeIrBuilder* old_builder ,
-                          struct BytecodeIrBuilder* new_builder ,
-                          struct IrNode* new_region ) {
+static void builder_clone( struct BytecodeIrBuilder* new_builder ,
+                           const struct BytecodeIrBuilder* old_builder ,
+                           struct IrNode* new_region ) {
   new_builder->proto = old_builder->proto;
   new_builder->graph = old_builder->graph;
   ss_clone(&(old_builder->stack),&(new_builder->stack));
@@ -179,7 +179,7 @@ static void builder_place_phi( struct BytecodeIrBuilder* left ,
                                struct BytecodeIrBuilder* right ,
                                struct IrNode* region ) {
   size_t i;
-  const size_t len = MIN(left->stack.stk_size,right->stack.stk_size);
+  const size_t len = SPARROW_MIN(left->stack.stk_size,right->stack.stk_size);
   /* The merge really just means place PHI node. Our phi node is simply a
    * node that takes 2 operands. Since we simply generate multiple branch
    * as nested if else branch then our PHI node should be simply nested
@@ -564,7 +564,7 @@ static int build_loop( struct Sparrow* sparrow ,
   /* 2. Phase2 : Generate PHI and modify all the node that
    * reference the PHI node */
   {
-    const size_t len = MIN(builder->stack.stk_size,
+    const size_t len = SPARROW_MIN(builder->stack.stk_size,
                            loop_body_builder.stack.stk_size);
     size_t i;
 
@@ -2041,6 +2041,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       comp = IrNodeNewConstNumber( builder->graph , opr , proto );
       aget = IrNodeNewAGet( builder->graph , ss_top(stack,0) , comp , region );
+      ss_replace(stack,aget);
       DISPATCH();
     }
 

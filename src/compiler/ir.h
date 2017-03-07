@@ -1,10 +1,10 @@
 #ifndef IR_H_
 #define IR_H_
 #include <sparrow.h>
-#include <vm/util.h>
+#include <shared/util.h>
+#include <shared/debug.h>
 #include <vm/bc.h>
 #include <vm/object.h>
-#include <vm/debug.h>
 #include <compiler/arch.h>
 
 struct IrNode;
@@ -174,7 +174,7 @@ enum {
 #undef X /* X */
 
 enum IrKind {
-  IRKIND_CONTROL,
+  IRKIND_CONTROL = 1,
   IRKIND_SHARED,
   IRKIND_CONSTANT,
   IRKIND_PRIMITIVE,

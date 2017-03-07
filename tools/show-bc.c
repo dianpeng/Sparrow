@@ -1,6 +1,7 @@
-#include "../src/vm/object.h"
-#include "../src/vm/vm.h"
-#include "../src/vm/parser.h"
+#include <vm/object.h>
+#include <vm/vm.h>
+#include <vm/parser.h>
+
 #include <dirent.h>
 #include <stdlib.h>
 #include <stdio.h>
