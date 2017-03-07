@@ -139,7 +139,7 @@ static void builder_init( struct BytecodeIrBuilder* builder , struct IrGraph* gr
   builder->mregion = malloc(sizeof(*builder->mregion));
   builder->mregion->mregion_arr = NULL;
   builder->mregion->mregion_size = 0;
-  builder->mregion->mregion_arr = 0;
+  builder->mregion->mregion_cap = 0;
   builder->loop = NULL;
   builder->parent_graph = parent_graph;
 }
@@ -219,8 +219,8 @@ builder_get_or_create_merged_region( const struct BytecodeIrBuilder* builder ,
     DynArrPush(builder->mregion,mregion,new_node);
     node = new_node.node;
   } else {
-    IrNodeAddOutput(builder->graph,node,if_true);
-    IrNodeAddOutput(builder->graph,node,if_false);
+    if(if_true != node) IrNodeAddOutput(builder->graph,if_true,node);
+    if(if_false!= node) IrNodeAddOutput(builder->graph,if_false,node);
   }
 
   return node;
@@ -335,15 +335,15 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
   {
     if_true = IrNodeNewIfTrue(graph,if_header);
 
-    /* Get a new builder */
-    builder_clone(&true_builder,builder,if_true);
-
     /* Decode the argument of the BC_IF instruction */
     if_false_pos = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
     builder->code_pos +=4;
 
+    /* Get a new builder */
+    builder_clone(&true_builder,builder,if_true);
+
     /* Build the IfTrue block */
-    if(!build_if_block(sparrow,&true_builder,if_false_pos))
+    if(build_if_block(sparrow,&true_builder,if_false_pos))
       return -1;
 
     /* Update the if_true region node */
@@ -389,7 +389,6 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
 
       /* Place the PHI nodes on the stack */
       builder_place_phi( &true_builder, &false_builder , merge );
-
       ss_move(&(builder->stack) , &(true_builder.stack));
       builder_destroy(&true_builder);
     } else {
@@ -1845,7 +1844,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RET) {
       IrNodeNewReturn(builder->graph,
                       IrNodeNewConstNull(builder->graph),
-                      builder->region);
+                      builder->region,
+                      graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }
@@ -1854,7 +1854,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       IrNodeNewReturn(builder->graph,
           IrNodeNewConstNumber(builder->graph,opr,proto),
-          builder->region);
+          builder->region,
+          graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }
@@ -1863,7 +1864,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       IrNodeNewReturn(builder->graph,
           IrNodeNewConstString(builder->graph,opr,proto),
-          builder->region);
+          builder->region,
+          graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }
@@ -1871,7 +1873,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RETT) {
       IrNodeNewReturn(builder->graph,
           IrNodeNewConstTrue(builder->graph),
-          builder->region);
+          builder->region,
+          graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }
@@ -1879,7 +1882,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RETF) {
       IrNodeNewReturn(builder->graph,
           IrNodeNewConstFalse(builder->graph),
-          builder->region);
+          builder->region,
+          graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }
@@ -1887,7 +1891,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RETN0) {
       IrNodeNewReturn(builder->graph,
           IrNodeGetConstNumber(builder->graph,0),
-          builder->region);
+          builder->region,
+          graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }
@@ -1895,7 +1900,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RETN1) {
       IrNodeNewReturn(builder->graph,
           IrNodeGetConstNumber(builder->graph,0),
-          builder->region);
+          builder->region,
+          graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }
@@ -1903,7 +1909,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RETNN1) {
       IrNodeNewReturn(builder->graph,
           IrNodeGetConstNumber(builder->graph,-1),
-          builder->region);
+          builder->region,
+          graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }
@@ -1911,7 +1918,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RETNULL) {
       IrNodeNewReturn(builder->graph,
           IrNodeNewConstNull(builder->graph),
-          builder->region);
+          builder->region,
+          graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
       DISPATCH();
     }

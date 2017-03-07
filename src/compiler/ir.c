@@ -56,7 +56,7 @@ remove_region( struct IrNode* region , struct IrNode* node ) {
     {
       struct IrUse* use = IrNodeFindInput(region,node);
       SPARROW_ASSERT(use);
-      remove_node(node,use,input);
+      remove_node(region,use,input);
     }
     node->bounded = 0;
   }
@@ -73,15 +73,19 @@ static void add_def_use( struct IrGraph* graph ,
 }
 
 void IrNodeAddInput( struct IrGraph* graph , struct IrNode* node , struct IrNode* target ) {
-  SPARROW_ASSERT(node->input_max <0 || node->input_size < node->input_max);
-  if( IrNodeFindInput(node,target) == NULL )
+  if( IrNodeFindInput(node,target) == NULL ) {
+    SPARROW_ASSERT(node->input_max <0 || node->input_size < node->input_max);
+    SPARROW_ASSERT(node != target);
     link_node(graph,node,target,input);
+  }
 }
 
 void IrNodeAddOutput(struct IrGraph* graph , struct IrNode* node , struct IrNode* target ) {
-  SPARROW_ASSERT(node->output_max <0 || node->output_size < node->output_max);
-  if( IrNodeFindOutput(node,target) == NULL )
+  if( IrNodeFindOutput(node,target) == NULL ) {
+    SPARROW_ASSERT(node->output_max <0 || node->output_size < node->output_max);
+    SPARROW_ASSERT(node != target);
     link_node(graph,node,target,output);
+  }
 }
 
 struct IrUse* IrNodeFindInput(struct IrNode* node , struct IrNode* target) {
@@ -503,10 +507,12 @@ struct IrNode* IrNodeNewLoopExit( struct IrGraph* graph , struct IrNode* parent 
 }
 
 struct IrNode* IrNodeNewReturn( struct IrGraph* graph, struct IrNode* value ,
-                                                       struct IrNode* parent ) {
+                                                       struct IrNode* parent,
+                                                       struct IrNode* end ) {
   struct IrNode* node = new_node( graph , IR_CTL_RET , 0 , 0 , 1 , 1 , 0 );
   IrNodeAddOutput(graph,parent,node);
   IrNodeAddInput (graph,node,value);
+  IrNodeAddOutput(graph,node,end);
   return node;
 }
 

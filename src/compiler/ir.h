@@ -504,7 +504,8 @@ struct IrNode* IrNodeNewLoopExit(struct IrGraph* , struct IrNode* pred );
 /* This function will link the Return node to end node in IrGraph automatically */
 struct IrNode* IrNodeNewReturn(struct IrGraph* ,
                                struct IrNode* value ,
-                               struct IrNode* pred);
+                               struct IrNode* pred,
+                               struct IrNode* end);
 
 /* Iterator */
 struct IrNode* IrNodeNewIterTest(struct IrGraph*, struct IrNode* value, struct IrNode* region);

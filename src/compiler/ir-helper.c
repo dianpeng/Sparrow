@@ -33,9 +33,6 @@ static SPARROW_INLINE void print_node( struct DotFormatBuilder* builder ,
       node->effect,
       node->prop_effect,
       node->bounded);
-
-  SPARROW_DUMP(INFO,"%s_%d:%d,%d",opcode_name,node->id,
-                                  node->input_size,node->output_size);
 }
 
 
@@ -61,15 +58,10 @@ static SPARROW_INLINE void print_node_input( struct DotFormatBuilder* builder ,
   {
     struct IrUse* start = IrNodeInputBegin(node);
     struct IrUse* end = IrNodeInputEnd(node);
-    size_t count = 0;
     while( start != end ) {
       print_node_link(builder,node,start->node,style);
       start = start->next;
-      ++count;
     }
-    SPARROW_DUMP(ERROR,"%d",(int)count);
-    // SPARROW_ASSERT(count == node->input_size);
-    (void)count;
   }
 }
 
@@ -80,15 +72,10 @@ static SPARROW_INLINE void print_node_output( struct DotFormatBuilder* builder ,
   if(IrIsControl(node->op)) {
     struct IrUse* start = IrNodeOutputBegin(node);
     struct IrUse* end  = IrNodeOutputEnd(node);
-    size_t count = 0;
     while( start != end ) {
       print_node_link(builder,node,start->node,"[style=bold]");
       start = start->next;
-      ++count;
     }
-    SPARROW_DUMP(ERROR,"%d",(int)count);
-    // SPARROW_ASSERT(count == node->output_size);
-    (void)count;
   }
 }
 
