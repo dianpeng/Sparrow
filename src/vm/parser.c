@@ -904,51 +904,6 @@ _DEFINE_PARITH(pexpr_term,is_compop,comp)
 #undef _DEFINE_PARITH
 
 /* pexpr_logic */
-#define is_booleantype(EXPR) is_const(EXPR)
-#define is_nonebooleantype(EXPR) (is_noneconst(EXPR))
-
-static int _check_tf( struct Expr* expr ) {
-  if(is_booleantype(expr)) {
-    if(is_convnum(expr)) {
-      struct Expr temp = *expr;
-      expr2num(&temp);
-      return temp.u.num ? 1 : 0;
-    } else if(expr->tag == ESTRING) {
-      return 1;
-    } else {
-      return 0;
-    }
-  } else {
-    return 2;
-  }
-}
-
-/* Logical value True/False table */
-enum {
-  LOGIC_FALSE,
-  LOGIC_TRUE,
-  LOGIC_NEEDEVAL
-};
-
-/* "&&" and "||" true false table */
-static const int logic_andtab[3][3] = {
-  /* Left : 0 , Right : 0 , 0, 0 */
-  { LOGIC_FALSE , LOGIC_FALSE , LOGIC_FALSE },
-  /* Left : 1 , Right : 0 , 1 , EVAL */
-  { LOGIC_FALSE , LOGIC_TRUE , LOGIC_NEEDEVAL},
-  /* Left : 2 , Right : 0 , EVAL , EVAL */
-  { LOGIC_FALSE , LOGIC_NEEDEVAL, LOGIC_NEEDEVAL }
-};
-
-static const int logic_ortab[3][3] = {
-  /* Left : 0 , Right : 0 , 1 , EVAL */
-  { LOGIC_FALSE , LOGIC_TRUE , LOGIC_NEEDEVAL },
-  /* Left : 1 , Right : 1 , 1 , EVAL */
-  { LOGIC_TRUE , LOGIC_TRUE , LOGIC_TRUE },
-  /* Left : 2 , Right : EVAL , 1 , EVAL */
-  { LOGIC_NEEDEVAL , LOGIC_TRUE , LOGIC_NEEDEVAL }
-};
-
 struct LogicJump {
   struct Label pos;
   enum Bytecode instr;
@@ -965,96 +920,51 @@ struct LogicJump {
     ++sz; \
   } while(0)
 
-static int pexpr_logic( struct Parser* p , const int (*tftab)[3],
-                                           enum Token oper,
-                                           int (*prev)( struct Parser* , struct Expr* ),
+static int pexpr_logic( struct Parser* p , enum Token oper ,
+                                           int (*next)(struct Parser*,struct Expr*),
                                            struct Expr* expr ) {
   struct Expr rexpr;
   struct LogicJump jmptb[LOGICOP_MAX];
   size_t sz = 0;
   enum Token tk;
-  expr->cpos = CodeBufferGetLabel(codebuf(p));
-  if(prev(p,expr)) return -1;
+  if(next(p,expr)) return -1;
   tk = LexerToken(&(p->lex));
-  if(tk == oper && is_nonebooleantype(expr)) _push_jmp();
-  while(tk == oper) {
-    int ltf,rtf;
-    int result;
-    NEXT();
-    rexpr.cpos = CodeBufferGetLabel(codebuf(p));
-    if(prev(p,&rexpr)) goto fail;
-    ltf = _check_tf(expr); rtf = _check_tf(&rexpr);
-    result = tftab[ltf][rtf];
-    switch(result) {
-      case LOGIC_TRUE:
-        if(is_nonebooleantype(expr)) {
-          SPARROW_ASSERT(is_booleantype(&rexpr));
-          CodeBufferSetToLabel(codebuf(p),expr->cpos);
-        }
-        if(is_nonebooleantype(&rexpr)) {
-          SPARROW_ASSERT(is_booleantype(expr));
-          CodeBufferSetToLabel(codebuf(p),rexpr.cpos);
-        }
-        expr->tag = ETRUE;
-        expr->cpos = CodeBufferGetLabel(codebuf(p));
-        break;
-      case LOGIC_FALSE:
-        if(is_nonebooleantype(expr)) {
-          SPARROW_ASSERT(is_booleantype(&rexpr));
-          CodeBufferSetToLabel(codebuf(p),expr->cpos);
-        }
-        if(is_nonebooleantype(&rexpr)) {
-          SPARROW_ASSERT(is_booleantype(expr));
-          CodeBufferSetToLabel(codebuf(p),expr->cpos);
-        }
-        expr->tag = EFALSE;
-        expr->cpos = CodeBufferGetLabel(codebuf(p));
-        break;
-      default:
-        if(is_nonebooleantype(&rexpr)) {
-          expr->cpos = rexpr.cpos;
-          if(LexerToken(&(p->lex)) != oper) {
-            /* generate last *test* instruction , this is used
-             * to rewrite the *last* component which doesn't have
-             * a brf/brt instruction , to true or false value */
-            cbOP(BC_TEST);
-          } else {
-            _push_jmp();
-          }
-        } else {
-          if(tryemit_expr(p,&rexpr)) return -1;
-          if((LexerToken(&(p->lex)) != oper) &&
-             (rexpr.tag != ETRUE && rexpr.tag != EFALSE)) {
-            cbOP(BC_TEST); /* Generate a test to rewrite last value */
-          }
-        }
-        expr->tag = EEXPR;
-        break;
+  if(tk == oper) {
+    if(tryemit_expr(p,expr)) return -1;
+    _push_jmp();
+    do {
+      NEXT();
+      if(next(p,&rexpr)) goto fail;
+      if(tryemit_expr(p,&rexpr)) return -1;
+      tk = LexerToken(&(p->lex));
+      if(tk == oper) _push_jmp();
+      else break;
+    } while(1);
+    cbOP(BC_TEST);
+    /* Fix jump table , ignore the *last* jump! */
+    if(sz) {
+      size_t i; size_t target = CodeBufferPos(codebuf(p));
+      for(i = 0; i < sz ; ++i) {
+        cbpatchA(jmptb[i].pos,jmptb[i].instr,(int32_t)(target));
+      }
     }
-    tk = LexerToken(&(p->lex));
+    expr->tag = EEXPR;
   }
-  /* Fix jump table , ignore the *last* jump! */
-  if(sz && expr->tag == EEXPR) {
-    size_t i; size_t target = CodeBufferPos(codebuf(p));
-    for(i = 0; i < sz ; ++i) {
-      cbpatchA(jmptb[i].pos,jmptb[i].instr,(int32_t)(target));
-    }
-  }
-  return 0;
 
+  return 0;
 fail:
   return -1;
 }
 
-#undef _push_jmp
-
 static int pexpr_logicand( struct Parser* p , struct Expr* expr ) {
-  return pexpr_logic(p,logic_andtab,TK_AND,pexpr_comp,expr);
+  return pexpr_logic(p,TK_AND,pexpr_comp,expr);
 }
 
 static int pexpr_logicor( struct Parser* p , struct Expr* expr ) {
-  return pexpr_logic(p,logic_ortab,TK_OR,pexpr_logicand,expr);
+  return pexpr_logic(p,TK_OR,pexpr_logicand,expr);
 }
+
+#undef _push_jmp
 
 /* *MUST* be none constant expression */
 #define is_pfixexpr(TAG) \

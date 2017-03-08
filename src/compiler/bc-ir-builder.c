@@ -27,9 +27,11 @@ static void ss_init( struct StackStats* ss ) {
 
 static void ss_push( struct StackStats* ss, struct IrNode* node ) {
   DynArrPush(ss,stk,node);
+  SPARROW_DUMP(ERROR,"Stk:%d",(int)(ss->stk_size));
 }
 
 static void ss_pop( struct StackStats* ss, size_t num ) {
+  SPARROW_DUMP(ERROR,"Stk:%d",(int)(ss->stk_size));
   SPARROW_ASSERT(num <= ss->stk_size);
   ss->stk_size -= num;
 }
@@ -99,6 +101,7 @@ struct LoopBuilder {
   struct IrNode* loop_exit;   /* Loop exit node */
   struct IrNode* loop_exit_true; /* The loop exit node's true node */
   struct IrNode* loop_exit_false;/* The loop exit node's false node */
+  struct IrNode* loop_iter;   /* Loop iterator */
 };
 
 struct BytecodeIrBuilder {
@@ -456,19 +459,17 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
 static void setup_loop_builder( struct Sparrow* sparrow ,
     struct BytecodeIrBuilder* builder ) {
   (void)sparrow;
-  struct IrNode* loop_variant;
+  struct IrNode* iter_test;
 
   SPARROW_ASSERT(builder->loop);
 
-  loop_variant = IrNodeNewIterTest(builder->graph,
-                                   ss_top(&(builder->stack),0),
-                                   builder->region);
-
-  ss_replace(&(builder->stack),loop_variant);
+  builder->loop->loop_iter = IrNodeNewIter(builder->graph, ss_top(&(builder->stack),0),builder->region);
+  ss_replace(&(builder->stack),builder->loop->loop_iter);
+  iter_test = IrNodeNewIterTest(builder->graph,builder->loop->loop_iter,builder->region);
 
   builder->loop->pre_if = IrNodeNewIf(
       builder->graph,
-      loop_variant,
+      iter_test,
       builder->region);
 
   builder->loop->pre_if_true = IrNodeNewIfTrue(
@@ -487,7 +488,12 @@ static void setup_loop_builder( struct Sparrow* sparrow ,
    * done *after* everything is done */
   builder->loop->loop_exit = IrNodeNewLoopExit(
       builder->graph,
-      loop_variant);
+      builder->loop->loop);
+
+  IrNodeAddInput(builder->graph,builder->loop->loop_exit,
+                                IrNodeNewIterTest(builder->graph,
+                                                  builder->loop->loop_iter,
+                                                  builder->loop->loop_exit));
 
   builder->loop->loop_exit_true = IrNodeNewIfTrue(
       builder->graph,
@@ -543,7 +549,7 @@ static int build_loop( struct Sparrow* sparrow ,
 
   /* Get the merge region position */
   merge_pos = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
-  builder->code_pos += 3;
+  builder->code_pos += 4;
 
   /* 0. Setup all the loop builder context */
   setup_loop_builder(sparrow,builder);
@@ -557,7 +563,7 @@ static int build_loop( struct Sparrow* sparrow ,
     if(build_loop_body(sparrow,&loop_body_builder)) return -1;
 
     /* Link the region in current builder to the loop_exit */
-    IrNodeAddOutput(builder->graph,builder->region,loop.loop_exit);
+    IrNodeAddOutput(builder->graph,loop_body_builder.region,loop.loop_exit);
   }
 
   /* 2. Phase2 : Generate PHI and modify all the node that
@@ -571,7 +577,7 @@ static int build_loop( struct Sparrow* sparrow ,
     merge = builder_get_or_create_merged_region(
         builder,
         merge_pos,
-        loop.loop_exit_true,
+        loop.pre_if_false,
         loop.loop_exit_false
         );
 
@@ -664,19 +670,13 @@ static int build_loop( struct Sparrow* sparrow ,
  */
 static struct IrNode* build_branch_header( struct Sparrow* sparrow ,
                                            struct BytecodeIrBuilder* builder ) {
-  struct IrNode* predicate = IrNodeNewUnary(builder->graph,
-                                            IR_H_TEST ,
-                                            ss_top(&(builder->stack),0),
-                                            builder->region);
+  struct IrNode* predicate = ss_top(&(builder->stack),0);
+
   struct IrNode* header = IrNodeNewIf( builder->graph ,
                                        predicate,
                                        builder->region );
   (void)sparrow;
 
-  /* Update the current TOS value , we are not supposed to pop this
-   * value since the branch instruction optionally pop the value out
-   * based on the result of the TOS evaluation */
-  ss_push(&(builder->stack),predicate);
   return header;
 }
 
@@ -697,16 +697,22 @@ static int build_branch( struct Sparrow* sparrow ,
   struct IrNode* header = build_branch_header( sparrow , builder );
   struct IrNode* ft_branch;
   struct IrNode* jump_branch;
+  struct IrNode* jump_branch_value;
   uint8_t op;
   uint32_t jump_pos;
 
   op = code_buf->buf[builder->code_pos];
   SPARROW_ASSERT(op == BC_BRF || op == BC_BRT);
   jump_pos = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
+  builder->code_pos += 4;
+
+  jump_branch_value = ss_top(&(builder->stack),0);
 
   /* 0. Setup fallthrough branch */
   {
-    struct IrNode* saved_region;
+    /* Pop the TOS value */
+    ss_pop(&(builder->stack),1);
+    SPARROW_DUMP(ERROR,"StackSize:%d",(int)(builder->stack.stk_size));
 
     /* Here we don't need a new builder/environment simply because
      * the fallthrough branch of the BRX bytecode will never introduce
@@ -715,36 +721,42 @@ static int build_branch( struct Sparrow* sparrow ,
      * The fallthrough branch will never need to modify its stack stats
      * simply because the TOS is actually used in that branch */
     ft_branch = (op == BC_BRF)  ?
-                 IrNodeNewIfFalse( builder->graph , header ) :
-                 IrNodeNewIfTrue ( builder->graph , header );
+                 IrNodeNewIfTrue( builder->graph , header ) :
+                 IrNodeNewIfFalse( builder->graph , header );
 
-
-    saved_region = builder->region;
 
     builder->region = ft_branch;
 
     if(build_branch_body(sparrow,builder,jump_pos)) return -1;
-
-    builder->region = saved_region;
   }
 
   /* 1. Setup jump branch which is *empty* , trivial branch */
   {
-    jump_branch = (op == BC_BRF) ?
-                  IrNodeNewIfTrue( builder->graph , header  ) :
-                  IrNodeNewIfFalse(builder->graph , header  );
+    if(op == BC_BRF) {
+      jump_branch = IrNodeNewIfFalse(builder->graph,header);
+    } else {
+      jump_branch = IrNodeNewIfTrue(builder->graph,header);
+    }
   }
 
   /* 2. Setup merge branch */
   {
     struct IrNode* merge = builder_get_or_create_merged_region(builder,
         jump_pos,
-        ft_branch,
+        builder->region,
         jump_branch);
+
+    /* Now place a PHI on the merge node here.
+     * Order to call IrNodeNewPhi matters !! */
+    struct IrNode* phi = IrNodeNewPhi(builder->graph, jump_branch_value,
+                                                      ss_top(&(builder->stack),0),
+                                                      merge);
+
+    SPARROW_DUMP(ERROR,"StackSize:%d",(int)(builder->stack.stk_size));
 
     /* pop the TOS from the stack since we are done with the fallthrough
      * branch . The merged region don't need any TOS value */
-    ss_pop(&(builder->stack),1);
+    ss_replace(&(builder->stack),phi);
     builder->region = merge;
     builder->code_pos = jump_pos;
   }
@@ -912,6 +924,7 @@ static int build_call_intrinsic( struct Sparrow* sparrow ,
   }
 
   ss_pop(&(builder->stack),arg_count);
+  ss_push(&(builder->stack),call);
   builder->code_pos += 4;
   return 0;
 }
@@ -941,6 +954,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
 #define DISPATCH() break
 
   op = code_buffer->buf[code_pos++];
+
+  SPARROW_DUMP(ERROR,"OP:%s",GetBytecodeName((enum Bytecode)(op)));
 
   switch(op) {
     CASE(BC_ADDNV) {
@@ -1843,7 +1858,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     /* Return */
     CASE(BC_RET) {
       IrNodeNewReturn(builder->graph,
-                      IrNodeNewConstNull(builder->graph),
+                      ss_top(stack,0),
                       builder->region,
                       graph->end);
       builder->region = IrNodeNewRegion( builder->graph );

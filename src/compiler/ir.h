@@ -301,11 +301,6 @@ struct IrNode {
                               * its operand has prop_effect or effect bit set.
                               */
 
-  uint16_t bounded: 1;       /* Whether this IrNode is bounded to a certain CF
-                              * node or not. It is a helper bit to optimize remove
-                              * operation on this node when this node is used by
-                              * multiple expressions */
-
   uint32_t id;               /* Ir Unique ID . User could use it to index to
                               * a side array for associating information that
                               * is local to a certain optimization pass */
@@ -324,6 +319,11 @@ struct IrNode {
   struct IrUseBase output_tail;
   int output_size;
   int output_max ;
+
+  /* This is only used for expression node. We could really hide it inside of
+   * the node to save some memroy for control flow node, but this is just
+   * simpler for me to write code */
+  struct IrNode* bounded_node; /* Bounded node */
 };
 
 #define IrNodeHasEffect(IRNODE) ((IRNODE)->effect || (IRNODE)->prop_effect)
@@ -384,6 +384,39 @@ struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value );
 struct IrNode* IrNodeNewConstNull( struct IrGraph* );
 struct IrNode* IrNodeNewArgument ( struct IrGraph* , uint32_t index );
 
+static SPARROW_INLINE int32_t IrNodeGetConstInt32( const struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_CONST_INT32);
+  return *(int32_t*)(IrNodeGetData(node));
+}
+
+static SPARROW_INLINE int64_t IrNodeGetConstInt64( const struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_CONST_INT64);
+  return *(int64_t*)(IrNodeGetData(node));
+}
+
+static SPARROW_INLINE double IrNodeGetConstReal64( const struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_CONST_REAL64);
+  return *(double*)(IrNodeGetData(node));
+}
+
+static SPARROW_INLINE const struct ObjStr* IrNodeGetConstString( const struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_CONST_STRING);
+  return *(const struct ObjStr**)(IrNodeGetData(node));
+}
+
+static SPARROW_INLINE int IrNodeGetConstBoolean( const struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_CONST_BOOLEAN);
+  return *(int*)(IrNodeGetData(node));
+}
+
+#define IrNodeConstIsTrue(NODE)  ((IrNodeGetConstBoolean(NODE)) == 1)
+#define IrNodeCosntIsFalse(NODE) ((IrNodeGetConstBoolean(NODE)) == 0)
+
+static SPARROW_INLINE uint32_t IrNodeGetArgument( const struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_PRIMITIVE_ARGUMENT);
+  return *(uint32_t*)(IrNodeGetData(node));
+}
+
 /* Primitive */
 struct IrNode* IrNodeNewList( struct IrGraph* );
 
@@ -409,13 +442,13 @@ void IrNodeClosureAddUpvalueEmbed(struct IrGraph* , struct IrNode* , struct IrNo
 void IrNodeClosureAddUpvalueDetach(struct IrGraph* , struct IrNode*  , uint32_t index );
 
 static SPARROW_INLINE
-uint32_t IrNodeUpvalueDetachGetIndex( struct IrNode* node ) {
+uint32_t IrNodeUpvalueDetachGetIndex( const struct IrNode* node ) {
   SPARROW_ASSERT(node->op == IR_PRIMITIVE_UPVALUE_DETACH);
   return *((uint32_t*)(IrNodeGetData(node)));
 }
 
 static SPARROW_INLINE
-const struct ObjProto* IrNodeClosureGetProto( struct IrNode* node ) {
+const struct ObjProto* IrNodeClosureGetProto( const struct IrNode* node ) {
   SPARROW_ASSERT(node->op == IR_PRIMITIVE_CLOSURE);
   return *((const struct ObjProto**)(IrNodeGetData(node)));
 }
@@ -432,7 +465,7 @@ struct IrNode* IrNodeNewCallIntrinsic( struct IrGraph* , enum IntrinsicFunction 
                                                          struct IrNode* region );
 
 static SPARROW_INLINE
-enum IntrinsicFunction IrNodeCallIntrinsicGetFunction( struct IrNode* node ) {
+enum IntrinsicFunction IrNodeCallIntrinsicGetFunction( const struct IrNode* node ) {
   SPARROW_ASSERT( node->op == IR_H_CALL_INTRINSIC );
   return *((enum IntrinsicFunction*)(IrNodeGetData(node)));
 }
@@ -457,7 +490,7 @@ struct IrNode* IrNodeNewASetIntrinsic( struct IrGraph* , struct IrNode* tos,
                                                          struct IrNode* region );
 
 static SPARROW_INLINE
-enum IntrinsicAttribute IrNodeAGetIntrinsicGetIntrinsic( struct IrNode* node ) {
+enum IntrinsicAttribute IrNodeAGetIntrinsicGetIntrinsic( const struct IrNode* node ) {
   SPARROW_ASSERT( node->op == IR_H_AGET_INTRINSIC );
   return *((enum IntrinsicAttribute*)(IrNodeGetData(node)));
 }
@@ -477,13 +510,13 @@ struct IrNode* IrNodeNewGSet( struct IrGraph* , struct IrNode* name ,
                                                 struct IrNode* region );
 
 static SPARROW_INLINE
-uint32_t IrNodeUGetGetIndex( struct IrNode* node ) {
+uint32_t IrNodeUGetGetIndex( const struct IrNode* node ) {
   SPARROW_ASSERT( node->op == IR_H_UGET );
   return *((uint32_t*)(IrNodeGetData(node)));
 }
 
 static SPARROW_INLINE
-uint32_t IrNodeUSetGetIndex( struct IrNode* node ) {
+uint32_t IrNodeUSetGetIndex( const struct IrNode* node ) {
   SPARROW_ASSERT( node->op == IR_H_USET );
   return *((uint32_t*)(IrNodeGetData(node)));
 }
@@ -498,8 +531,10 @@ struct IrNode* IrNodeNewMerge (struct IrGraph* , struct IrNode* if_true , struct
 struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* cond, struct IrNode* pred );
 struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
+struct IrNode* IrNodeNewBrTrue(struct IrGraph* , struct IrNode* pred );
+struct IrNode* IrNodeNewBrFalse(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewLoop(struct IrGraph* , struct IrNode* pred );
-struct IrNode* IrNodeNewLoopExit(struct IrGraph* , struct IrNode* pred );
+struct IrNode* IrNodeNewLoopExit(struct IrGraph* , struct IrNode* parent );
 
 /* This function will link the Return node to end node in IrGraph automatically */
 struct IrNode* IrNodeNewReturn(struct IrGraph* ,
@@ -509,17 +544,32 @@ struct IrNode* IrNodeNewReturn(struct IrGraph* ,
 
 /* Iterator */
 struct IrNode* IrNodeNewIterTest(struct IrGraph*, struct IrNode* value, struct IrNode* region);
-struct IrNode* IrNodeNewIterNew (struct IrGraph*, struct IrNode* value, struct IrNode* region);
+struct IrNode* IrNodeNewIter    (struct IrGraph*, struct IrNode* value, struct IrNode* region);
 struct IrNode* IrNodeNewIterDref(struct IrGraph* , struct IrNode* , struct IrNode* );
 
 /* Misc */
+struct IrNodePhiData {
+  struct IrNode* merge_node; /* On which merge node, this PHI is introduced */
+};
+
 struct IrNode* IrNodeNewPhi( struct IrGraph* , struct IrNode* left ,
                                                struct IrNode* right ,
                                                struct IrNode* region );
 
+static SPARROW_INLINE
+struct IrNodePhiData* IrNodePhiGetBoundedControlNode( struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_PHI);
+  return (struct IrNodePhiData*)(IrNodeGetData(node));
+}
+
 struct IrNode* IrNodeNewProjection( struct IrGraph* , struct IrNode* target ,
                                                       uint32_t index ,
                                                       struct IrNode* region );
+
+static SPARROW_INLINE uint32_t IrNodeProjectionGetIndex( const struct IrNode* node ) {
+  SPARROW_ASSERT(node->op == IR_PROJECTION);
+  return *(uint32_t*)(IrNodeGetData(node));
+}
 
 /* IR graph ================================================================
  * IR graph is really just a high level name of a bundle that has lots of

@@ -306,6 +306,8 @@ enum Bytecode {
 #undef __
 };
 
+const char* GetBytecodeName( enum Bytecode );
+
 enum Bytecode IFuncGetBytecode( const char* name );
 const char* IFuncGetName( enum IntrinsicFunction );
 

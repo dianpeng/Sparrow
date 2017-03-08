@@ -2,6 +2,8 @@
 #include <compiler/ir-set.h>
 #include <compiler/ir.h>
 
+#include <vm/object.h>
+
 #include <shared/debug.h>
 #include <shared/util.h>
 
@@ -25,16 +27,69 @@ static SPARROW_INLINE void print_node( struct DotFormatBuilder* builder ,
                                        const struct IrNode* node ) {
   const char* opcode_name = IrGetName(node->op);
   SPARROW_ASSERT( IrGraphGrayMark(graph) == node->mark );
-  StrBufPrintF(builder->output,"%s_%d [shape=box,lable=\"%s:%p:%d:%d:%d\"];\n",
-      opcode_name,
-      node->id,
-      opcode_name,
-      node,
-      node->effect,
-      node->prop_effect,
-      node->bounded);
-}
+  if(IrIsControl(node->op)) {
+    StrBufPrintF(builder->output,"%s_%d [shape=box];\n", opcode_name, node->id);
+  } else {
+    struct CStr xlabel;
 
+    /* Based on the type of node , we may have private data needs to show */
+    switch(node->op) {
+      case IR_CONST_INT32:
+        xlabel = CStrPrintF("xlabel=\"%d\"",IrNodeGetConstInt32(node));
+        break;
+      case IR_CONST_INT64:
+        xlabel = CStrPrintF("xlabel=\"%" PRId64 "\"",IrNodeGetConstInt64(node));
+        break;
+      case IR_CONST_REAL64:
+        xlabel = CStrPrintF("xlabel=\"%d\"",IrNodeGetConstReal64(node));
+        break;
+      case IR_CONST_BOOLEAN:
+        xlabel = CStrPrintF("xlabel=\"%s\"",IrNodeConstIsTrue(node) ? "true" : "false");
+        break;
+      case IR_CONST_NULL:
+        xlabel = CStrPrintF("xlabel=\"null\"");
+        break;
+      case IR_CONST_STRING:
+        xlabel = CStrPrintF("xlabel=\"%s\"",IrNodeGetConstString(node)->str);
+        break;
+      case IR_PRIMITIVE_ARGUMENT:
+        xlabel = CStrPrintF("xlabel=\"%d\"",IrNodeGetArgument(node));
+        break;
+      case IR_PRIMITIVE_UPVALUE_DETACH:
+        xlabel = CStrPrintF("xlabel=\"%d\"",IrNodeUpvalueDetachGetIndex(node));
+        break;
+      case IR_PRIMITIVE_CLOSURE:
+        xlabel = CStrPrintF("xlabel=\"%s\"",IrNodeClosureGetProto(node)->proto.str);
+        break;
+      case IR_H_CALL_INTRINSIC:
+        {
+          const char* name = IFuncGetName(IrNodeCallIntrinsicGetFunction(node));
+          xlabel = CStrPrintF("xlabel=\"%s\"",name);
+          break;
+        }
+      case IR_H_AGET_INTRINSIC:
+        xlabel = CStrPrintF("xlabel=\"%s\"",IAttrGetName(IrNodeAGetIntrinsicGetIntrinsic(node)));
+        break;
+      case IR_H_UGET:
+        xlabel = CStrPrintF("xlabel=\"%d\"",IrNodeUGetGetIndex(node));
+        break;
+      case IR_H_USET:
+        xlabel = CStrPrintF("xlabel=\"%d\"",IrNodeUSetGetIndex(node));
+        break;
+      case IR_PROJECTION:
+        xlabel = CStrPrintF("xlabel=\"%d\"",IrNodeProjectionGetIndex(node));
+        break;
+      default:
+        xlabel = CStrPrintF("xlabel=\"\"");
+        break;
+    }
+
+    StrBufPrintF(builder->output,"%s_%d [shape=oval,color=green,%s];\n",
+        opcode_name,
+        node->id,
+        xlabel.str);
+  }
+}
 
 static SPARROW_INLINE void print_node_link( struct DotFormatBuilder* builder ,
     const struct IrNode* from , const struct IrNode* to , const char* style ) {
@@ -50,7 +105,7 @@ static SPARROW_INLINE void print_node_input( struct DotFormatBuilder* builder ,
   const char* style;
   (void)graph;
   if(IrIsControl(node->op)) {
-    style = "[style=dotted]";
+    style = "[style=dashed]";
   } else {
     style = "";
   }
@@ -59,7 +114,7 @@ static SPARROW_INLINE void print_node_input( struct DotFormatBuilder* builder ,
     struct IrUse* start = IrNodeInputBegin(node);
     struct IrUse* end = IrNodeInputEnd(node);
     while( start != end ) {
-      print_node_link(builder,node,start->node,style);
+      print_node_link(builder,start->node,node,style);
       start = start->next;
     }
   }

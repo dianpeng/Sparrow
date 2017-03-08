@@ -22,6 +22,15 @@ static const char* IATTRTABLE[] = {
   NULL
 };
 
+const char* GetBytecodeName( enum Bytecode op ) {
+#define __(A,B,C) case A: return B;
+  switch(op) {
+    BYTECODE(__)
+    default: return NULL;
+  }
+#undef __ /* __ */
+}
+
 enum Bytecode IFuncGetBytecode( const char* name ) {
   size_t i;
   for( i = 0 ; i < SIZE_OF_IFUNC ; ++i ) {

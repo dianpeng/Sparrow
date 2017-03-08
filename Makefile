@@ -41,7 +41,7 @@ test:
 	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) test/vm/vm-test-driver.c -lm -o vm-test-driver
 
 show_bc:
-	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) tools/show-bc.c -lm -o show-bc
+	$(CC) -Wall -Werror -g3 $(DEPENDEND) tools/show-bc.c -lm -o show-bc
 
 ir:
 	$(CC) -Wall -Werror -g3 $(DEPENDEND) test/compiler/ir-test.c -lm -o ir-test
