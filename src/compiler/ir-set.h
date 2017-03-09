@@ -14,15 +14,22 @@ struct IrNodeStack {
   size_t ir_cap;
 };
 
-static SPARROW_INLINE void IrNodeStackPush( struct IrNodeStack* stack ,
-                                            struct IrNode* node ) {
-  DynArrPush(stack,ir,node);
-}
-
 static SPARROW_INLINE void IrNodeStackInit( struct IrNodeStack* stack , size_t cap ) {
   stack->ir_arr = malloc(sizeof(struct IrNode*)*cap);
   stack->ir_size= 0;
   stack->ir_cap = cap;
+}
+
+static SPARROW_INLINE void IrNodeStackDestroy( struct IrNodeStack* stack ) {
+  free(stack->ir_arr);
+  stack->ir_arr = NULL;
+  stack->ir_size = 0;
+  stack->ir_cap  = 0;
+}
+
+static SPARROW_INLINE void IrNodeStackPush( struct IrNodeStack* stack ,
+                                            struct IrNode* node ) {
+  DynArrPush(stack,ir,node);
 }
 
 static SPARROW_INLINE struct IrNode* IrNodeStackPop( struct IrNodeStack* stack ) {

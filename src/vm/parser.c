@@ -270,7 +270,10 @@ static void enter_lexscope( struct Parser* p ,
 }
 
 static void leave_lexscope( struct Parser* p ) {
-  struct LexScope* scp = cclosure(p)->cur_scp;
+  struct PClosure* pc  = cclosure(p);
+  struct LexScope* scp = pc->cur_scp;
+  /* remove all local variables */
+  pc->vt_size -= scp->var_size;
   /* pop all local variable defined in this freaking scope */
   if(scp->var_size) cbA(BC_POP,(int)scp->var_size);
   cclosure(p)->cur_scp = scp->prev;
@@ -402,7 +405,7 @@ static void expr2num( struct Expr* expr ) {
       expr->tag = ENUMBER;
       break;
     default:
-      SPARROW_ASSERT(!"unreachable!");
+      SPARROW_UNREACHABLE();
       break;
   }
 }
@@ -414,7 +417,7 @@ static int expr_index( struct Parser* p , struct Expr* expr ) {
     case ESTRING:
       return ConstAddString(objclosure(p),expr->str);
     default:
-      SPARROW_ASSERT(!"unreachable!"); return -1;
+      SPARROW_UNREACHABLE(); return -1;
   }
 }
 
@@ -442,7 +445,7 @@ static int emit_loadnum( struct Parser* p , double num ) {
       case 3: cbOP(BC_LOADN3); break;
       case 4: cbOP(BC_LOADN4); break;
       case 5: cbOP(BC_LOADN5); break;
-      default: SPARROW_ASSERT(!"unreachable!"); break;
+      default: SPARROW_UNREACHABLE(); break;
     }
   }
   return 0;
@@ -543,7 +546,7 @@ static int emit_arithcomp( struct Parser* p ,
             case TK_GE : _emit(BC_GESV,BC_GEVS); break;
             case TK_EQ : _emit(BC_EQSV,BC_EQVS); break;
             case TK_NE : _emit(BC_NESV,BC_NEVS); break;
-            default: SPARROW_ASSERT(!"unreachable!"); break;
+            default: SPARROW_UNREACHABLE(); break;
           }
         }
       } else {
@@ -567,7 +570,7 @@ static int emit_arithcomp( struct Parser* p ,
           case TK_GT : _emit(BC_GTNV,BC_GTVN); break;
           case TK_EQ : _emit(BC_EQNV,BC_EQVN); break;
           case TK_NE : _emit(BC_NENV,BC_NEVN); break;
-          default: SPARROW_ASSERT(!"unreachable!"); break;
+          default: SPARROW_UNREACHABLE(); break;
         }
       }
     } else {
@@ -607,7 +610,7 @@ static int emit_arithcomp( struct Parser* p ,
       case TK_GT : cbOP(BC_GTVV) ; break;
       case TK_EQ : cbOP(BC_EQVV) ; break;
       case TK_NE : cbOP(BC_NEVV) ; break;
-      default: SPARROW_ASSERT(!"unreachable!"); break;
+      default: SPARROW_UNREACHABLE(); break;
     }
   }
   lexpr->tag = EEXPR;
@@ -631,7 +634,7 @@ _tryfold_unary( struct Parser* p , enum Token tk , struct Expr* expr ) {
         expr->u.num = -1;
       } else if(tk == TK_NOT) {
         expr->tag = EFALSE;
-      } else SPARROW_ASSERT(!"unreachable!");
+      } else SPARROW_UNREACHABLE();
       return 0;
     case EFALSE:
       if(tk == TK_SUB) {
@@ -646,7 +649,7 @@ _tryfold_unary( struct Parser* p , enum Token tk , struct Expr* expr ) {
         expr->u.num = -(expr->u.num);
       } else if(tk == TK_NOT) {
         expr->tag = (expr->u.num ? EFALSE : ETRUE);
-      } else SPARROW_ASSERT(!"unreachable!");
+      } else SPARROW_UNREACHABLE();
       return 0;
     case ENULL:
       if(tk == TK_SUB) {
@@ -654,7 +657,7 @@ _tryfold_unary( struct Parser* p , enum Token tk , struct Expr* expr ) {
         return -1;
       } else if(tk == TK_NOT) {
         expr->tag = ETRUE;
-      } else SPARROW_ASSERT(!"unreachable!");
+      } else SPARROW_UNREACHABLE();
       return 0;
     case ESTRING:
       if(tk == TK_SUB) {
@@ -662,10 +665,10 @@ _tryfold_unary( struct Parser* p , enum Token tk , struct Expr* expr ) {
         return -1;
       } else if(tk == TK_NOT) {
         expr->tag = EFALSE;
-      } else SPARROW_ASSERT(!"unreachable!");
+      } else SPARROW_UNREACHABLE();
       return 0;
     default:
-      SPARROW_ASSERT(!"unreachable!"); return -1;
+      SPARROW_UNREACHABLE(); return -1;
   }
 }
 
@@ -740,7 +743,7 @@ tryfold_arithcomp( struct Parser* p ,
         l->tag = (lnum !=rnum ? ETRUE : EFALSE);
         break;
       default:
-        SPARROW_ASSERT(!"unreachable!"); break;
+        SPARROW_UNREACHABLE(); break;
     }
     return FOLD;
   } else {
@@ -771,7 +774,7 @@ tryfold_arithcomp( struct Parser* p ,
             l->tag = ((ObjStrEqual(l->str,r->str))? ETRUE:EFALSE);
             break;
           default:
-            SPARROW_ASSERT(!"unreachable!"); break;
+            SPARROW_UNREACHABLE(); break;
         }
         return FOLD;
       } else {
@@ -864,7 +867,7 @@ static int pexpr_unary( struct Parser* p ,struct Expr* expr) {
     switch(oparr[i]) {
       case TK_SUB: cbOP(BC_NEG); break;
       case TK_NOT: cbOP(BC_NOT); break;
-      default: SPARROW_ASSERT(!"unreachable!"); break;
+      default: SPARROW_UNREACHABLE(); break;
     }
   }
   return 0;
@@ -1048,7 +1051,7 @@ static int _pexpr_pfixcomp( struct Parser* p , struct Expr* expr ) {
     case TK_LPAR:
       return pexpr_funccall(p,expr);
     default:
-      SPARROW_ASSERT(!"unreachable!"); return -1;
+      SPARROW_UNREACHABLE(); return -1;
   }
 }
 
@@ -1120,7 +1123,7 @@ pexpr_list( struct Parser* p , struct Expr* expr ) {
       ++ecnt;
     } while(1);
     switch(ecnt) {
-      case 0: SPARROW_ASSERT(!"unreachable!"); break;
+      case 0: SPARROW_UNREACHABLE(); break;
       case 1: cbOP(BC_NEWL1); break;
       case 2: cbOP(BC_NEWL2); break;
       case 3: cbOP(BC_NEWL3); break;
@@ -1174,7 +1177,7 @@ pexpr_map( struct Parser* p , struct Expr* expr ) {
       ++ecnt;
     } while(1);
     switch(ecnt) {
-      case 0: SPARROW_ASSERT(!"unreachable!"); break;
+      case 0: SPARROW_UNREACHABLE(); break;
       case 1: cbOP(BC_NEWM1); break;
       case 2: cbOP(BC_NEWM2); break;
       case 3: cbOP(BC_NEWM3); break;
@@ -1664,7 +1667,7 @@ static int parse_return( struct Parser* p ) {
               case 0: cbOP(BC_RETN0); break;
               case 1: cbOP(BC_RETN1); break;
               case -1:cbOP(BC_RETNN1);break;
-              default: SPARROW_ASSERT(!"unreachable!"); break;
+              default: SPARROW_UNREACHABLE(); break;
             }
           }
         }
@@ -1833,7 +1836,7 @@ static int parse_assignorfunccall( struct Parser* p ) {
                 case -3:cbA(BC_MOVENN3,idx); break;
                 case -4:cbA(BC_MOVENN4,idx); break;
                 case -5:cbA(BC_MOVENN5,idx); break;
-                default: SPARROW_ASSERT(!"unreachable!"); break;
+                default: SPARROW_UNREACHABLE(); break;
               }
             }
           }

@@ -515,6 +515,7 @@ udata_print:
         litr->step,
         litr->loop);
   } else {
+    SPARROW_UNREACHABLE();
   }
 }
 
@@ -877,7 +878,7 @@ const char* ValueGetTypeString( Value v ) {
   } else if(Vis_loop_iterator(&v)) {
     return "loop_iterator";
   } else {
-    SPARROW_ASSERT(!"unreachable!");
+    SPARROW_UNREACHABLE();
     return NULL;
   }
 }

@@ -28,13 +28,18 @@ static int show_graph( const char* path ) {
   { /* Build an IR graph */
     struct IrGraph graph;
     struct StrBuf output;
+    struct IrGraphDisplayOption option;
+    option.show_extra_info = 1;
+    option.only_control_flow = 1;
     IrGraphInit(&graph,mod,proto,&sparrow);
     StrBufInit(&output,1024);
     assert(!BytecodeToIrGraph(&sparrow,&graph));
-    IrGraphToDotFormat( &output , &graph );
+    IrGraphToDotFormat( &output , &graph , &option);
     fwrite(output.buf,1,output.size,stdout);
     StrBufDestroy(&output);
+    IrGraphDestroy(&graph);
   }
+  SparrowDestroy(&sparrow);
   return 0;
 }
 

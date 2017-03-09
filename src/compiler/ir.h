@@ -55,6 +55,8 @@ struct IrGraph;
   X(CTL_MERGE,"ctl_merge") \
   /* place holder for a bunch of value */ \
   X(CTL_REGION,"ctl_region") \
+  /* jump , unconditional */ \
+  X(CTL_JUMP,"ctl_jump") \
   /* branch node */ \
   X(CTL_IF,"ctl_if") \
   X(CTL_IF_TRUE,"ctl_if_true") \
@@ -131,7 +133,10 @@ struct IrGraph;
   X(H_ITER_DREF,"h_iter_dref") \
   /* Function */ \
   X(H_CALL,"h_call") \
-  X(H_CALL_INTRINSIC,"h_call_intrinsic")
+  X(H_CALL_INTRINSIC,"h_call_intrinsic") \
+  /* Used to compile logic combination */ \
+  X(H_BRTRUE,"h_brtrue") \
+  X(H_BRFALSE,"h_brfalse")
 
 #define ALL_IRS(X) \
   CONTROL_IR_LIST(X) \
@@ -301,6 +306,8 @@ struct IrNode {
                               * its operand has prop_effect or effect bit set.
                               */
 
+  uint16_t dead : 1;         /* Whether this node is dead during the DCE */
+
   uint32_t id;               /* Ir Unique ID . User could use it to index to
                               * a side array for associating information that
                               * is local to a certain optimization pass */
@@ -375,13 +382,19 @@ struct IrNode* IrNodeNewUnary ( struct IrGraph* , int op, struct IrNode* operand
 
 /* Function to get intrinsice number constant node. Number must be in range
  * [-5,5] */
-struct IrNode* IrNodeGetConstNumber( struct IrGraph* , int32_t number );
-struct IrNode* IrNodeNewConstNumber( struct IrGraph* , uint32_t index , const struct ObjProto* );
-struct IrNode* IrNodeNewConstString( struct IrGraph* , uint32_t index , const struct ObjProto* );
-struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value );
-#define IrNodeNewConstTrue(GRAPH) IrNodeNewConstBoolean(GRAPH,1)
-#define IrNodeNewConstFalse(GRAPH) IrNodeNewConstBoolean(GRAPH,0)
-struct IrNode* IrNodeNewConstNull( struct IrGraph* );
+struct IrNode* IrNodeGetConstNumber( struct IrGraph* , int32_t number ,
+                                                       struct IrNode* region );
+struct IrNode* IrNodeNewConstNumber( struct IrGraph* , uint32_t index ,
+                                                       const struct ObjProto*,
+                                                       struct IrNode* region );
+struct IrNode* IrNodeNewConstString( struct IrGraph* , uint32_t index ,
+                                                       const struct ObjProto*,
+                                                       struct IrNode* region );
+struct IrNode* IrNodeNewConstBoolean(struct IrGraph* , int value ,
+                                                       struct IrNode* region );
+#define IrNodeNewConstTrue(GRAPH,REGION) IrNodeNewConstBoolean(GRAPH,1,REGION)
+#define IrNodeNewConstFalse(GRAPH,REGION) IrNodeNewConstBoolean(GRAPH,0,REGION)
+struct IrNode* IrNodeNewConstNull( struct IrGraph* , struct IrNode* region );
 struct IrNode* IrNodeNewArgument ( struct IrGraph* , uint32_t index );
 
 static SPARROW_INLINE int32_t IrNodeGetConstInt32( const struct IrNode* node ) {
@@ -419,27 +432,26 @@ static SPARROW_INLINE uint32_t IrNodeGetArgument( const struct IrNode* node ) {
 
 /* Primitive */
 struct IrNode* IrNodeNewList( struct IrGraph* );
-
 /* For adding input into List/Map , do not use IrNodeAddInput/Output, but use
  * following functions which takes care of the effect */
-void IrNodeListAddArgument( struct IrGraph* , struct IrNode*  , struct IrNode*  , struct IrNode* );
-
+void IrNodeListAddArgument( struct IrGraph* , struct IrNode*  , struct IrNode*  );
 void IrNodeListSetRegion  ( struct IrGraph* , struct IrNode*  , struct IrNode*  );
 
 struct IrNode* IrNodeNewMap( struct IrGraph* );
-
 void IrNodeMapAddArgument( struct IrGraph* , struct IrNode* map , struct IrNode* key ,
-                                                                  struct IrNode* val ,
-                                                                  struct IrNode* region );
-
+                                                                  struct IrNode* val );
 void IrNodeMapSetRegion  ( struct IrGraph* , struct IrNode* , struct IrNode* ); 
 
 /* A loaded closure is always no effect and not impcated by its upvalue */
-struct IrNode* IrNodeNewClosure( struct IrGraph* , const struct ObjProto* , size_t upcnt );
-
-void IrNodeClosureAddUpvalueEmbed(struct IrGraph* , struct IrNode* , struct IrNode* );
-
-void IrNodeClosureAddUpvalueDetach(struct IrGraph* , struct IrNode*  , uint32_t index );
+struct IrNode* IrNodeNewClosure( struct IrGraph* , const struct ObjProto* ,
+                                                   size_t upcnt ,
+                                                   struct IrNode* region );
+void IrNodeClosureAddUpvalueEmbed(struct IrGraph* , struct IrNode* ,
+                                                    struct IrNode* ,
+                                                    struct IrNode* region );
+void IrNodeClosureAddUpvalueDetach(struct IrGraph* , struct IrNode*  ,
+                                                     uint32_t index ,
+                                                     struct IrNode* region );
 
 static SPARROW_INLINE
 uint32_t IrNodeUpvalueDetachGetIndex( const struct IrNode* node ) {
@@ -521,20 +533,23 @@ uint32_t IrNodeUSetGetIndex( const struct IrNode* node ) {
   return *((uint32_t*)(IrNodeGetData(node)));
 }
 
+struct IrNode* IrNodeNewBranch( struct IrGraph* , int op );
+void IrNodeBranchAdd( struct IrGraph* , struct IrNode* , struct IrNode* );
+void IrNodeBranchSetRegion( struct IrGraph* , struct IrNode* , struct IrNode* );
+
 /* Control flow node.
  *
  * Each control flow node can have *unbounded* Input node but fixed number of
  * output node. EG: a binary branch will have to force you to add a If node
  * since it is the only node that is able have 2 branches/output */
 struct IrNode* IrNodeNewRegion(struct IrGraph*);
+struct IrNode* IrNodeNewJump  (struct IrGraph*,struct IrNode*,struct IrNode*);
 struct IrNode* IrNodeNewMerge (struct IrGraph* , struct IrNode* if_true , struct IrNode* if_false );
 struct IrNode* IrNodeNewIf( struct IrGraph* , struct IrNode* cond, struct IrNode* pred );
 struct IrNode* IrNodeNewIfTrue(struct IrGraph*, struct IrNode* pred );
 struct IrNode* IrNodeNewIfFalse(struct IrGraph*, struct IrNode* pred );
-struct IrNode* IrNodeNewBrTrue(struct IrGraph* , struct IrNode* pred );
-struct IrNode* IrNodeNewBrFalse(struct IrGraph*, struct IrNode* pred );
-struct IrNode* IrNodeNewLoop(struct IrGraph* , struct IrNode* pred );
-struct IrNode* IrNodeNewLoopExit(struct IrGraph* , struct IrNode* parent );
+struct IrNode* IrNodeNewLoop(struct IrGraph* , struct IrNode* );
+struct IrNode* IrNodeNewLoopExit(struct IrGraph*);
 
 /* This function will link the Return node to end node in IrGraph automatically */
 struct IrNode* IrNodeNewReturn(struct IrGraph* ,
@@ -611,5 +626,7 @@ void IrGraphInit( struct IrGraph* , const struct ObjModule* module ,
 void IrGraphInitForInline( struct IrGraph* new_graph ,
                            struct IrGraph* parent_graph ,
                            uint32_t protocol_index );
+
+void IrGraphDestroy( struct IrGraph* );
 
 #endif /* IR_H_ */

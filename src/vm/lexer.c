@@ -154,7 +154,7 @@ kw_comp( const char* L , const char* R ) {
     else
       return -1;
   }
-  SPARROW_ASSERT(0); return -1;
+  SPARROW_UNREACHABLE(); return -1;
 }
 
 static int
@@ -313,7 +313,7 @@ struct Lexeme* LexerNext( struct Lexer* lex ) {
         return lex_var_or_kw(lex);
     }
   } while(1);
-  SPARROW_ASSERT(0); return NULL;
+  SPARROW_UNREACHABLE(); return NULL;
 }
 
 void LexerUnescapeStringLiteral( struct StrBuf* sbuf , const char* str ,

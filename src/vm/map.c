@@ -8,7 +8,7 @@ enum {
   DO_INSERT
 };
 
-static struct ObjMapEntry* find_entry( struct ObjMap* map , 
+static struct ObjMapEntry* find_entry( struct ObjMap* map ,
     const struct ObjStr* key , int opt ) {
   /* Try to find the main position */
   int fhash = key->hash;

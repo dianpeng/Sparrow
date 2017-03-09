@@ -27,11 +27,9 @@ static void ss_init( struct StackStats* ss ) {
 
 static void ss_push( struct StackStats* ss, struct IrNode* node ) {
   DynArrPush(ss,stk,node);
-  SPARROW_DUMP(ERROR,"Stk:%d",(int)(ss->stk_size));
 }
 
 static void ss_pop( struct StackStats* ss, size_t num ) {
-  SPARROW_DUMP(ERROR,"Stk:%d",(int)(ss->stk_size));
   SPARROW_ASSERT(num <= ss->stk_size);
   ss->stk_size -= num;
 }
@@ -463,9 +461,15 @@ static void setup_loop_builder( struct Sparrow* sparrow ,
 
   SPARROW_ASSERT(builder->loop);
 
-  builder->loop->loop_iter = IrNodeNewIter(builder->graph, ss_top(&(builder->stack),0),builder->region);
+  builder->loop->loop_iter = IrNodeNewIter(builder->graph,
+                                           ss_top(&(builder->stack),0),
+                                           builder->region);
+
   ss_replace(&(builder->stack),builder->loop->loop_iter);
-  iter_test = IrNodeNewIterTest(builder->graph,builder->loop->loop_iter,builder->region);
+
+  iter_test = IrNodeNewIterTest(builder->graph,
+                                builder->loop->loop_iter,
+                                builder->region);
 
   builder->loop->pre_if = IrNodeNewIf(
       builder->graph,
@@ -486,9 +490,7 @@ static void setup_loop_builder( struct Sparrow* sparrow ,
 
   /* NOTES: the loop exit node is not linked with graph. The link will be
    * done *after* everything is done */
-  builder->loop->loop_exit = IrNodeNewLoopExit(
-      builder->graph,
-      builder->loop->loop);
+  builder->loop->loop_exit = IrNodeNewLoopExit(builder->graph);
 
   IrNodeAddInput(builder->graph,builder->loop->loop_exit,
                                 IrNodeNewIterTest(builder->graph,
@@ -564,6 +566,7 @@ static int build_loop( struct Sparrow* sparrow ,
 
     /* Link the region in current builder to the loop_exit */
     IrNodeAddOutput(builder->graph,loop_body_builder.region,loop.loop_exit);
+
   }
 
   /* 2. Phase2 : Generate PHI and modify all the node that
@@ -592,12 +595,12 @@ static int build_loop( struct Sparrow* sparrow ,
          * to be modified as well.
          * We could know those used node by inspecting the def-use chain */
         struct IrNode* phi = IrNodeNewPhi(builder->graph,left,right,merge);
-        struct IrUse* start= IrNodeOutputBegin(right);
+        struct IrUse* start= IrNodeOutputBegin(left);
 
-        while(start != IrNodeOutputEnd(right)) {
+        while(start != IrNodeOutputEnd(left)) {
           struct IrNode* victim = start->node;
           if(victim != phi) {
-            struct IrUse* use_place = IrNodeFindInput(victim,right);
+            struct IrUse* use_place = IrNodeFindInput(victim,left);
             SPARROW_ASSERT(use_place);
 
             /* patched the used place to use new phi node .
@@ -628,7 +631,7 @@ static int build_loop( struct Sparrow* sparrow ,
             IrNodeAddOutput(builder->graph,phi,victim);
 
             /* Remove this use since we modify it */
-            start = IrNodeRemoveOutput(right,start);
+            start = IrNodeRemoveOutput(left,start);
           } else {
             start = start->next; /* Not a potential victim */
           }
@@ -654,6 +657,8 @@ static int build_loop( struct Sparrow* sparrow ,
   builder->loop = saved_loop_builder;
   builder_destroy(&loop_body_builder);
 
+  SPARROW_DUMP(ERROR,"StackSize:%d",(int)builder->stack.stk_size);
+
   return 0;
 }
 
@@ -669,14 +674,18 @@ static int build_loop( struct Sparrow* sparrow ,
  * Each BC_BRT/BC_BRF strictly forms a graph same as a solo "if".
  */
 static struct IrNode* build_branch_header( struct Sparrow* sparrow ,
-                                           struct BytecodeIrBuilder* builder ) {
-  struct IrNode* predicate = ss_top(&(builder->stack),0);
+                                           struct BytecodeIrBuilder* builder ,
+                                           int op ) {
+  struct IrNode* predicate = IrNodeNewUnary( builder->graph ,
+                                             IR_H_TEST ,
+                                             ss_top(&(builder->stack),0),
+                                             builder->region);
 
-  struct IrNode* header = IrNodeNewIf( builder->graph ,
-                                       predicate,
-                                       builder->region );
+  struct IrNode* header = IrNodeNewBranch( builder->graph ,
+      (op == BC_BRF) ? IR_H_BRFALSE : IR_H_BRTRUE );
+
   (void)sparrow;
-
+  IrNodeBranchAdd( builder->graph , header , predicate );
   return header;
 }
 
@@ -694,10 +703,7 @@ static int build_branch( struct Sparrow* sparrow ,
     struct BytecodeIrBuilder* builder ) {
   const struct ObjProto* proto = builder->proto;
   const struct CodeBuffer* code_buf = &(proto->code_buf);
-  struct IrNode* header = build_branch_header( sparrow , builder );
-  struct IrNode* ft_branch;
-  struct IrNode* jump_branch;
-  struct IrNode* jump_branch_value;
+  struct IrNode* header;
   uint8_t op;
   uint32_t jump_pos;
 
@@ -705,59 +711,19 @@ static int build_branch( struct Sparrow* sparrow ,
   SPARROW_ASSERT(op == BC_BRF || op == BC_BRT);
   jump_pos = CodeBufferDecodeArg(code_buf,builder->code_pos+1);
   builder->code_pos += 4;
-
-  jump_branch_value = ss_top(&(builder->stack),0);
+  header = build_branch_header( sparrow , builder , op );
 
   /* 0. Setup fallthrough branch */
   {
-    /* Pop the TOS value */
     ss_pop(&(builder->stack),1);
-    SPARROW_DUMP(ERROR,"StackSize:%d",(int)(builder->stack.stk_size));
-
-    /* Here we don't need a new builder/environment simply because
-     * the fallthrough branch of the BRX bytecode will never introduce
-     * kill to existed slot. The code generated here is *in* expression,
-     * it is a subexpression.
-     * The fallthrough branch will never need to modify its stack stats
-     * simply because the TOS is actually used in that branch */
-    ft_branch = (op == BC_BRF)  ?
-                 IrNodeNewIfTrue( builder->graph , header ) :
-                 IrNodeNewIfFalse( builder->graph , header );
-
-
-    builder->region = ft_branch;
-
     if(build_branch_body(sparrow,builder,jump_pos)) return -1;
+    IrNodeBranchAdd(builder->graph,header,ss_top(&(builder->stack),0));
+    IrNodeBranchSetRegion(builder->graph,header,builder->region);
   }
 
-  /* 1. Setup jump branch which is *empty* , trivial branch */
+  /* 1. Setup merge branch */
   {
-    if(op == BC_BRF) {
-      jump_branch = IrNodeNewIfFalse(builder->graph,header);
-    } else {
-      jump_branch = IrNodeNewIfTrue(builder->graph,header);
-    }
-  }
-
-  /* 2. Setup merge branch */
-  {
-    struct IrNode* merge = builder_get_or_create_merged_region(builder,
-        jump_pos,
-        builder->region,
-        jump_branch);
-
-    /* Now place a PHI on the merge node here.
-     * Order to call IrNodeNewPhi matters !! */
-    struct IrNode* phi = IrNodeNewPhi(builder->graph, jump_branch_value,
-                                                      ss_top(&(builder->stack),0),
-                                                      merge);
-
-    SPARROW_DUMP(ERROR,"StackSize:%d",(int)(builder->stack.stk_size));
-
-    /* pop the TOS from the stack since we are done with the fallthrough
-     * branch . The merged region don't need any TOS value */
-    ss_replace(&(builder->stack),phi);
-    builder->region = merge;
+    ss_replace(&(builder->stack),header);
     builder->code_pos = jump_pos;
   }
 
@@ -794,8 +760,7 @@ static int build_list( struct Sparrow* sparrow ,
   for( i = size - 1 ; i >= 0 ; --i ) {
     IrNodeListAddArgument(builder->graph,
                        list,
-                       ss_top(&(builder->stack),i),
-                       builder->region);
+                       ss_top(&(builder->stack),i));
   }
 
   IrNodeListSetRegion(builder->graph,list,builder->region);
@@ -837,8 +802,7 @@ static int build_map( struct Sparrow* sparrow ,
     IrNodeMapAddArgument(builder->graph,
                       map,
                       ss_top(&(builder->stack),i+1),
-                      ss_top(&(builder->stack),i),
-                      builder->region);
+                      ss_top(&(builder->stack),i));
   }
 
   IrNodeMapSetRegion(builder->graph,map,builder->region);
@@ -903,6 +867,7 @@ static int build_call( struct Sparrow* sparrow ,
   }
 
   ss_pop(&(builder->stack),arg_count+1);
+  ss_push(&(builder->stack),call);
   return 0;
 }
 
@@ -949,6 +914,11 @@ static int build_bytecode( struct Sparrow* sparrow ,
     code_pos += 3; \
   } while(0)
 
+#define SKIP_ARG() \
+  do { \
+    code_pos += 3; \
+  } while(0)
+
 #define CASE(X) case X:
 
 #define DISPATCH() break
@@ -962,7 +932,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_ADD ,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -974,7 +944,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_ADD ,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -985,7 +955,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
           ss_top(stack,0),
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -995,7 +965,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1015,7 +985,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1026,7 +996,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1047,7 +1017,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1059,7 +1029,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1080,7 +1050,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1092,7 +1062,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1111,7 +1081,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1123,7 +1093,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1142,7 +1112,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1154,7 +1124,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_ADD,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1202,14 +1172,14 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_LOADN) {
       struct IrNode* n;
       DECODE_ARG();
-      n = IrNodeNewConstNumber(graph,opr,proto);
+      n = IrNodeNewConstNumber(graph,opr,proto,region);
       ss_push(stack,n);
       DISPATCH();
     }
 
 #define DO(N) \
     CASE(BC_LOADN##N) {  \
-      struct IrNode* n = IrNodeGetConstNumber(graph,N); \
+      struct IrNode* n = IrNodeGetConstNumber(graph,N,region); \
       ss_push(stack,n); \
       DISPATCH(); \
     }
@@ -1236,7 +1206,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
 #define DO(N) \
     CASE(BC_LOADNN##N) { \
-      struct IrNode* n = IrNodeGetConstNumber(graph,-(N)); \
+      struct IrNode* n = IrNodeGetConstNumber(graph,-(N),region); \
       ss_push(stack,n); \
       DISPATCH(); \
     }
@@ -1261,7 +1231,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_LOADS) {
       struct IrNode* n;
       DECODE_ARG();
-      n = IrNodeNewConstString(graph,opr,proto);
+      n = IrNodeNewConstString(graph,opr,proto,region);
       ss_push(stack,n);
       DISPATCH();
     }
@@ -1273,17 +1243,17 @@ static int build_bytecode( struct Sparrow* sparrow ,
     }
 
     CASE(BC_LOADNULL) {
-      ss_push(stack,IrNodeNewConstNull(graph));
+      ss_push(stack,IrNodeNewConstNull(graph,region));
       DISPATCH();
     }
 
     CASE(BC_LOADTRUE) {
-      ss_push(stack,IrNodeNewConstTrue(graph));
+      ss_push(stack,IrNodeNewConstTrue(graph,region));
       DISPATCH();
     }
 
     CASE(BC_LOADFALSE) {
-      ss_push(stack,IrNodeNewConstFalse(graph));
+      ss_push(stack,IrNodeNewConstFalse(graph,region));
       DISPATCH();
     }
 
@@ -1295,7 +1265,10 @@ static int build_bytecode( struct Sparrow* sparrow ,
       new_proto = builder->graph->mod->cls_arr[opr];
       closure = IrNodeNewClosure(builder->graph,
                                  new_proto,
-                                 new_proto->uv_size);
+                                 new_proto->uv_size,
+                                 region);
+      /* Load it before populating the upvalue */
+      ss_push(stack,closure);
 
       /* Now we need to add all the upvalue be part of the Closure */
       for( i = 0 ; i < new_proto->uv_size ; ++i ) {
@@ -1304,14 +1277,15 @@ static int build_bytecode( struct Sparrow* sparrow ,
           /* Embedded upvalue, directly fetch it from the stack */
           IrNodeClosureAddUpvalueEmbed(builder->graph,
               closure,
-              ss_bot(stack,idx->idx));
+              ss_bot(stack,idx->idx),
+              region);
         } else {
           IrNodeClosureAddUpvalueDetach(builder->graph,
               closure,
-              idx->idx);
+              idx->idx,
+              region);
         }
       }
-
       DISPATCH();
     }
 
@@ -1334,26 +1308,26 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_MOVETRUE) {
       DECODE_ARG();
-      ss_place(stack,opr,IrNodeNewConstTrue(graph));
+      ss_place(stack,opr,IrNodeNewConstTrue(graph,region));
       DISPATCH();
     }
 
     CASE(BC_MOVEFALSE) {
       DECODE_ARG();
-      ss_place(stack,opr,IrNodeNewConstFalse(graph));
+      ss_place(stack,opr,IrNodeNewConstFalse(graph,region));
       DISPATCH();
     }
 
     CASE(BC_MOVENULL) {
       DECODE_ARG();
-      ss_place(stack,opr,IrNodeNewConstNull(graph));
+      ss_place(stack,opr,IrNodeNewConstNull(graph,region));
       DISPATCH();
     }
 
 #define DO(N) \
     CASE(BC_MOVEN##N) { \
       DECODE_ARG(); \
-      ss_place(stack,opr,IrNodeGetConstNumber(graph,N)); \
+      ss_place(stack,opr,IrNodeGetConstNumber(graph,N,region)); \
       DISPATCH(); \
     }
 
@@ -1380,7 +1354,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 #define DO(N) \
     CASE(BC_MOVENN##N) { \
       DECODE_ARG(); \
-      ss_place(stack,opr,IrNodeGetConstNumber(graph,-(N))); \
+      ss_place(stack,opr,IrNodeGetConstNumber(graph,-(N),region)); \
       DISPATCH(); \
     }
 
@@ -1406,7 +1380,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_LT ,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1418,7 +1392,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_LT ,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1428,7 +1402,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_LT ,
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1440,7 +1414,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_LT ,
           ss_top(stack,0),
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1460,7 +1434,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_LE ,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1472,7 +1446,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_LE ,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1482,7 +1456,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_LE ,
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1494,7 +1468,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_LE ,
           ss_top(stack,0),
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1513,7 +1487,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_GT ,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1525,7 +1499,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_GT ,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1535,7 +1509,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_GT ,
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1547,7 +1521,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_GT ,
           ss_top(stack,0),
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1566,7 +1540,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_GE ,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1578,7 +1552,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_GE ,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1588,7 +1562,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_GE ,
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1600,7 +1574,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_GE ,
           ss_top(stack,0),
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1621,7 +1595,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_EQ ,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1633,7 +1607,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_EQ ,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1643,7 +1617,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary( graph , IR_H_EQ ,
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1654,7 +1628,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       bin = IrNodeNewBinary( graph , IR_H_EQ ,
           ss_top(stack,0),
-          IrNodeNewConstNull(graph),
+          IrNodeNewConstNull(graph,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1663,7 +1637,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_EQNULLV) {
       struct IrNode* bin;
       bin = IrNodeNewBinary(graph, IR_H_EQ ,
-          IrNodeNewConstNull(graph),
+          IrNodeNewConstNull(graph,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1683,7 +1657,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_NE,
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1695,7 +1669,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_NE,
           ss_top(stack,0),
-          IrNodeNewConstNumber(graph,opr,proto),
+          IrNodeNewConstNumber(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1705,7 +1679,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* bin;
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_NE,
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1717,7 +1691,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       bin = IrNodeNewBinary(graph,IR_H_NE,
           ss_top(stack,0),
-          IrNodeNewConstString(graph,opr,proto),
+          IrNodeNewConstString(graph,opr,proto,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1725,7 +1699,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_NENULLV) {
       struct IrNode* bin = IrNodeNewBinary(graph,IR_H_NE,
-          IrNodeNewConstNull(graph),
+          IrNodeNewConstNull(graph,region),
           ss_top(stack,0),
           region);
       ss_replace(stack,bin);
@@ -1735,7 +1709,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_NEVNULL) {
       struct IrNode* bin = IrNodeNewBinary(graph,IR_H_NE,
           ss_top(stack,0),
-          IrNodeNewConstNull(graph),
+          IrNodeNewConstNull(graph,region),
           region);
       ss_replace(stack,bin);
       DISPATCH();
@@ -1764,15 +1738,10 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_BRK) {
       struct LoopBuilder* loop = builder->loop;
       SPARROW_ASSERT(loop);
+      builder->region = IrNodeNewJump(builder->graph,builder->region,
+                                                     loop->loop_exit_false);
 
-      /* Link the current region to the loop exit node's if_false node */
-      IrNodeAddOutput(builder->graph,builder->region,loop->loop_exit_false);
-
-      /* Currently for simplicity we just add a new region node here and
-       * this node will be DCE . We could really just mark anything that
-       * is after a unconditional jump as dead while we construct our
-       * ir graph. Maybe something to do in the future */
-      builder->region = IrNodeNewRegion(builder->graph);
+      SKIP_ARG();
       DISPATCH();
     }
 
@@ -1780,12 +1749,9 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct LoopBuilder* loop = builder->loop;
       SPARROW_ASSERT(loop);
 
-      /* Link the current region to the loop_exit node. */
-      IrNodeAddOutput(builder->graph,builder->region,loop->loop_exit);
-
-      /* Same as BREAK , add a region node after the continue and it will
-       * be DCEed. */
-      builder->region = IrNodeNewRegion(builder->graph);
+      builder->region = IrNodeNewJump(builder->graph,builder->region,
+                                                     loop->loop_exit);
+      SKIP_ARG();
       DISPATCH();
     }
 
@@ -1868,7 +1834,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RETN) {
       DECODE_ARG();
       IrNodeNewReturn(builder->graph,
-          IrNodeNewConstNumber(builder->graph,opr,proto),
+          IrNodeNewConstNumber(builder->graph,opr,proto,region),
           builder->region,
           graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
@@ -1878,7 +1844,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_RETS) {
       DECODE_ARG();
       IrNodeNewReturn(builder->graph,
-          IrNodeNewConstString(builder->graph,opr,proto),
+          IrNodeNewConstString(builder->graph,opr,proto,region),
           builder->region,
           graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
@@ -1887,7 +1853,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_RETT) {
       IrNodeNewReturn(builder->graph,
-          IrNodeNewConstTrue(builder->graph),
+          IrNodeNewConstTrue(builder->graph,region),
           builder->region,
           graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
@@ -1896,7 +1862,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_RETF) {
       IrNodeNewReturn(builder->graph,
-          IrNodeNewConstFalse(builder->graph),
+          IrNodeNewConstFalse(builder->graph,region),
           builder->region,
           graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
@@ -1905,7 +1871,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_RETN0) {
       IrNodeNewReturn(builder->graph,
-          IrNodeGetConstNumber(builder->graph,0),
+          IrNodeGetConstNumber(builder->graph,0,region),
           builder->region,
           graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
@@ -1914,7 +1880,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_RETN1) {
       IrNodeNewReturn(builder->graph,
-          IrNodeGetConstNumber(builder->graph,0),
+          IrNodeGetConstNumber(builder->graph,0,region),
           builder->region,
           graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
@@ -1923,7 +1889,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_RETNN1) {
       IrNodeNewReturn(builder->graph,
-          IrNodeGetConstNumber(builder->graph,-1),
+          IrNodeGetConstNumber(builder->graph,-1,region),
           builder->region,
           graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
@@ -1932,7 +1898,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_RETNULL) {
       IrNodeNewReturn(builder->graph,
-          IrNodeNewConstNull(builder->graph),
+          IrNodeNewConstNull(builder->graph,region),
           builder->region,
           graph->end);
       builder->region = IrNodeNewRegion( builder->graph );
@@ -2042,7 +2008,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* comp;
       struct IrNode* aget;
       DECODE_ARG();
-      comp = IrNodeNewConstString( builder->graph , opr, proto );
+      comp = IrNodeNewConstString( builder->graph , opr, proto , region );
       aget = IrNodeNewAGet( builder->graph , ss_top(stack,0) , comp , region );
       ss_replace(stack,aget);
       DISPATCH();
@@ -2062,7 +2028,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
       struct IrNode* comp;
       struct IrNode* aget;
       DECODE_ARG();
-      comp = IrNodeNewConstNumber( builder->graph , opr , proto );
+      comp = IrNodeNewConstNumber( builder->graph , opr , proto , region );
       aget = IrNodeNewAGet( builder->graph , ss_top(stack,0) , comp , region );
       ss_replace(stack,aget);
       DISPATCH();
@@ -2082,7 +2048,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_ASETN) {
       struct IrNode* comp;
       DECODE_ARG();
-      comp = IrNodeNewConstNumber(builder->graph,opr,proto);
+      comp = IrNodeNewConstNumber(builder->graph,opr,proto,region);
       IrNodeNewASet( builder->graph , ss_top(stack,1),
                                       comp,
                                       ss_top(stack,0),
@@ -2094,7 +2060,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_ASETS) {
       struct IrNode* comp;
       DECODE_ARG();
-      comp = IrNodeNewConstString(builder->graph,opr,proto);
+      comp = IrNodeNewConstString(builder->graph,opr,proto,region);
       IrNodeNewASet( builder->graph , ss_top(stack,1),
                                       comp,
                                       ss_top(stack,0),
@@ -2138,21 +2104,21 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_USETTRUE) {
       DECODE_ARG();
-      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstTrue(builder->graph),
+      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstTrue(builder->graph,region),
                                             region );
       DISPATCH();
     }
 
     CASE(BC_USETFALSE) {
       DECODE_ARG();
-      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstFalse(builder->graph),
+      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstFalse(builder->graph,region),
                                             region );
       DISPATCH();
     }
 
     CASE(BC_USETNULL) {
       DECODE_ARG();
-      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstNull(builder->graph),
+      IrNodeNewUSet( builder->graph , opr , IrNodeNewConstNull(builder->graph,region),
                                             region );
       DISPATCH();
     }
@@ -2161,7 +2127,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       ss_push(stack,IrNodeNewGGet(builder->graph,IrNodeNewConstString(builder->graph,
                                                          opr,
-                                                         proto),region));
+                                                         proto,
+                                                         region),region));
       DISPATCH();
     }
 
@@ -2169,7 +2136,8 @@ static int build_bytecode( struct Sparrow* sparrow ,
       DECODE_ARG();
       IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,
                                                         opr,
-                                                        proto),
+                                                        proto,
+                                                        region),
                                                         ss_top(stack,0),
                                                         region);
       ss_pop(stack,1);
@@ -2178,24 +2146,24 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_GSETTRUE) {
       DECODE_ARG();
-      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto),
-                                   IrNodeNewConstTrue(builder->graph),
+      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto,region),
+                                   IrNodeNewConstTrue(builder->graph,region),
                                    region);
       DISPATCH();
     }
 
     CASE(BC_GSETFALSE) {
       DECODE_ARG();
-      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto),
-                                   IrNodeNewConstFalse(builder->graph),
+      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto,region),
+                                   IrNodeNewConstFalse(builder->graph,region),
                                    region);
       DISPATCH();
     }
 
     CASE(BC_GSETNULL) {
       DECODE_ARG();
-      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto),
-                                   IrNodeNewConstNull(builder->graph),
+      IrNodeNewGSet(builder->graph,IrNodeNewConstString(builder->graph,opr,proto,region),
+                                   IrNodeNewConstNull(builder->graph,region),
                                    region);
       DISPATCH();
     }
@@ -2215,6 +2183,7 @@ int BytecodeToIrGraph( struct Sparrow* sparrow , struct IrGraph* graph ) {
   size_t code_len = graph->proto->code_buf.pos;
   int ret = 0;
   size_t i;
+
   builder_init(&builder,graph,NULL);
 
   /* Push all the argument into the stack */
