@@ -25,5 +25,4 @@ static SPARROW_INLINE void IrGraphDisplayOptionDefault( struct IrGraphDisplayOpt
 int IrGraphToDotFormat( struct StrBuf* buffer , struct IrGraph* graph ,
                                                 const struct IrGraphDisplayOption* option );
 
-
 #endif /* IR_HELPER_H_ */

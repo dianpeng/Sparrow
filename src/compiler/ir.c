@@ -46,7 +46,7 @@ static void
 add_region( struct IrGraph* graph , struct IrNode* region , struct IrNode* node ) {
   SPARROW_ASSERT(IrIsControl(region->op));
   SPARROW_ASSERT(node->bounded_node == NULL);
-  IrNodeAddInput(graph,region,node);
+  link_node(graph,region,node,input);
   node->bounded_node = region;
 }
 
@@ -522,8 +522,8 @@ struct IrNode* IrNodeNewRegion( struct IrGraph* graph ) {
 struct IrNode* IrNodeNewJump  ( struct IrGraph* graph , struct IrNode* parent ,
                                                         struct IrNode* next ) {
   struct IrNode* node = new_node(graph , IR_CTL_JUMP , 0 , 0 , 0 , -1 , 2 , 0 );
-  IrNodeAddOutput(graph,parent,node);
-  IrNodeAddOutput(graph,node,next);
+  link_node(graph,parent,node,output);
+  link_node(graph,node,next,output);
   return node;
 }
 
@@ -532,8 +532,8 @@ struct IrNode* IrNodeNewMerge( struct IrGraph* graph , struct IrNode* if_true ,
   struct IrNode* bin = new_node( graph , IR_CTL_MERGE , 0 , 0 , 0 , -1 , 1 , 0 );
   SPARROW_ASSERT(if_true->op == IR_CTL_IF_TRUE || IR_CTL_IF_FALSE);
   SPARROW_ASSERT(if_false->op == IR_CTL_IF_FALSE || IR_CTL_IF_TRUE);
-  IrNodeAddOutput(graph,if_true,bin);
-  IrNodeAddOutput(graph,if_false,bin);
+  link_node(graph,if_true,bin,output);
+  link_node(graph,if_false,bin,output);
   return bin;
 }
 
@@ -541,9 +541,9 @@ struct IrNode* IrNodeNewIf( struct IrGraph* graph , struct IrNode* predicate ,
                                                     struct IrNode* parent ) {
   struct IrNode* node = new_node( graph , IR_CTL_IF , 0 , 0 , 0 , 1 , 2 , 0 );
   /* link the control flow chain */
-  IrNodeAddOutput(graph,parent,node);
+  link_node(graph,parent,node,output);
   /* link the expression that is bounded in this node */
-  IrNodeAddInput (graph,node,predicate);
+  link_node(graph,node,predicate,output);
   /* remove the predicate's bounded region */
   remove_region(predicate);
   return node;
@@ -552,19 +552,19 @@ struct IrNode* IrNodeNewIf( struct IrGraph* graph , struct IrNode* predicate ,
 struct IrNode* IrNodeNewIfTrue( struct IrGraph* graph , struct IrNode* parent ) {
 
   struct IrNode* node = new_node( graph , IR_CTL_IF_TRUE , 0 , 0 , 0 , -1 , 1 , 0 );
-  IrNodeAddOutput(graph,parent,node);
+  link_node(graph,parent,node,output);
   return node;
 }
 
 struct IrNode* IrNodeNewIfFalse(struct IrGraph* graph , struct IrNode* parent ) {
   struct IrNode* node = new_node( graph , IR_CTL_IF_FALSE , 0 , 0 , 0 , -1 , 1 , 0 );
-  IrNodeAddOutput(graph,parent,node);
+  link_node(graph,parent,node,output);
   return node;
 }
 
 struct IrNode* IrNodeNewLoop( struct IrGraph* graph , struct IrNode* parent ) {
   struct IrNode* node = new_node( graph , IR_CTL_LOOP , 0 , 0 , 0 , -1 , 1 , 0 );
-  IrNodeAddOutput(graph,parent,node);
+  link_node(graph,parent,node,output);
   return node;
 }
 
@@ -577,9 +577,9 @@ struct IrNode* IrNodeNewReturn( struct IrGraph* graph, struct IrNode* value ,
                                                        struct IrNode* parent,
                                                        struct IrNode* end ) {
   struct IrNode* node = new_node( graph , IR_CTL_RET , 0 , 0 , 0 , 1 , 1 , 0 );
-  IrNodeAddOutput(graph,parent,node);
-  IrNodeAddInput (graph,node,value);
-  IrNodeAddOutput(graph,node,end);
+  link_node(graph,parent,node,output);
+  link_node(graph,node,value,input);
+  link_node(graph,node,end,output);
   remove_region(value);
   return node;
 }

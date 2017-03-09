@@ -1,11 +1,9 @@
 #include <compiler/ir-helper.h>
 #include <compiler/ir-set.h>
 #include <compiler/ir.h>
-
-#include <vm/object.h>
-
 #include <shared/debug.h>
 #include <shared/util.h>
+#include <vm/object.h>
 
 /* -----------------------------------------------------------------------
  * I am not an expert of dot format, so I will just use the basic feature

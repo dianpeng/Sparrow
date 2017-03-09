@@ -37,7 +37,7 @@ parser:
 vm:
 	$(CC) -Wall -Werror -DSPARROW_DEFAULT_GC_THRESHOLD=1 -g3 $(DEPENDEND) test/vm/vm-test.c -lm -o vm-test
 
-test:
+sparrow-interp:
 	$(CC) -O3 -Wall -Werror -g3 $(DEPENDEND) test/vm/vm-test-driver.c -lm -o vm-test-driver
 
 show_bc:
