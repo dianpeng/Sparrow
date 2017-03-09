@@ -984,7 +984,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_SUBNV) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_SUB,
           IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
@@ -995,7 +995,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_SUBVN) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_SUB,
           IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
@@ -1005,7 +1005,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_SUBVV) {
       struct IrNode* bin;
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_SUB,
           ss_top(stack,1),
           ss_top(stack,0),
           region);
@@ -1016,7 +1016,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_MULNV) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_MUL,
           IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
@@ -1027,7 +1027,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_MULVN) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_MUL,
           ss_top(stack,0),
           IrNodeNewConstNumber(graph,opr,proto,region),
           region);
@@ -1037,7 +1037,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_MULVV) {
       struct IrNode* bin;
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_MUL,
           ss_top(stack,1),
           ss_top(stack,0),
           region);
@@ -1049,7 +1049,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_DIVNV) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_DIV,
           IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
@@ -1060,7 +1060,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_DIVVN) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_DIV,
           ss_top(stack,0),
           IrNodeNewConstNumber(graph,opr,proto,region),
           region);
@@ -1069,7 +1069,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     }
 
     CASE(BC_DIVVV) {
-      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,
+      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_DIV,
           ss_top(stack,1),
           ss_top(stack,0),
           region);
@@ -1080,7 +1080,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_MODVN) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_MOD,
           IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
@@ -1091,7 +1091,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_MODNV) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_MOD,
           ss_top(stack,0),
           IrNodeNewConstNumber(graph,opr,proto,region),
           region);
@@ -1100,7 +1100,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     }
 
     CASE(BC_MODVV) {
-      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_ADD,
+      struct IrNode* bin = IrNodeNewBinary(graph,IR_H_MOD,
           ss_top(stack,1),
           ss_top(stack,0),
           region);
@@ -1111,7 +1111,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_POWNV) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_POW,
           IrNodeNewConstNumber(graph,opr,proto,region),
           ss_top(stack,0),
           region);
@@ -1122,7 +1122,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
     CASE(BC_POWVN) {
       struct IrNode* bin;
       DECODE_ARG();
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_POW,
           ss_top(stack,0),
           IrNodeNewConstNumber(graph,opr,proto,region),
           region);
@@ -1132,7 +1132,7 @@ static int build_bytecode( struct Sparrow* sparrow ,
 
     CASE(BC_POWVV) {
       struct IrNode* bin;
-      bin = IrNodeNewBinary(graph,IR_H_ADD,
+      bin = IrNodeNewBinary(graph,IR_H_POW,
           ss_top(stack,1),
           ss_top(stack,0),
           region);

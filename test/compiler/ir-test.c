@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-static int show_graph( const char* path ) {
+static int show_graph( const char* path , int show_control ) {
   struct ObjModule* mod;
   struct ObjProto* proto;
   struct CStr err;
@@ -30,7 +30,7 @@ static int show_graph( const char* path ) {
     struct StrBuf output;
     struct IrGraphDisplayOption option;
     option.show_extra_info = 1;
-    option.only_control_flow = 1;
+    option.only_control_flow = show_control;
     IrGraphInit(&graph,mod,proto,&sparrow);
     StrBufInit(&output,1024);
     assert(!BytecodeToIrGraph(&sparrow,&graph));
@@ -44,10 +44,10 @@ static int show_graph( const char* path ) {
 }
 
 int main( int argc , char* argv[] ) {
-  if(argc != 2) {
+  if(argc != 2 && argc != 3) {
     fprintf(stderr,"Usage\n");
     return -1;
   } else {
-    return show_graph(argv[1]);
+    return show_graph(argv[1],argc == 3);
   }
 }

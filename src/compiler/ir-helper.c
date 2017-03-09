@@ -127,6 +127,11 @@ static SPARROW_INLINE void print_node_input( struct DotFormatBuilder* builder ,
                                              const struct IrNode* node ) {
   const char* style;
   (void)graph;
+
+  /* Bail out if user just want to see control flow */
+  if(builder->option->only_control_flow && IrIsControl(node->op))
+    return;
+
   if(IrIsControl(node->op)) {
     style = "[style=dashed]";
   } else {
