@@ -420,7 +420,9 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
  * scope. The loop variant is the TOS element. A loop is closed by
  * BC_FORLOOP instruction which tells to jump back to the loop header.
  *
- * The loop will be compiled into a relative complicated graph:
+ * The loop will be compiled into a relative complicated graph. As you
+ * will see below, this is loop-inversion style graph , in LLVM term,
+ * this is even a degradated loop-rotation graph :
  *
  *        --------------
  *    --- |  IfNode    |--------
@@ -449,8 +451,9 @@ static int build_if( struct Sparrow* sparrow , struct BytecodeIrBuilder* builder
  *    |             --------------                    |
  *    |------------>| IfFalse    |--------------------|
  *                  --------------
- *  This makes our life easier since we could easily correctly place the
- *  BREAK and CONTINUE jump to the correct node
+ *
+ *
+ * This is better for LICM and peeling.
  *
  */
 

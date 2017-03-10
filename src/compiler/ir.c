@@ -1,4 +1,5 @@
 #include <compiler/ir.h>
+#include <shared/debug.h>
 #include <math.h>
 
 /* Linked list related stuff */
@@ -30,6 +31,18 @@
   } while(0)
 
 #define IRNODE_GET_DATA(IRNODE,TYPE) (TYPE)IrNodeGetData(IRNODE)
+
+struct opcode_name {
+  int op;
+  const char* name;
+};
+
+static struct opcode_name OPCODE_NAME[] = {
+#define __(A,B) { IR_##A , B },
+  ALL_IRS(__)
+  { -1 , NULL }
+#undef __ /* __ */
+};
 
 const char* IrGetName( int opcode ) {
 #define __(A,B) case IR_##A : return B ;
@@ -665,6 +678,96 @@ struct IrNode* IrNodeNewProjection( struct IrGraph* graph , struct IrNode* targe
   *IRNODE_GET_DATA(node,uint32_t*) = index;
   if(node->prop_effect) add_region(graph,region,node);
   return node;
+}
+
+/* IrNode RAW ========================================================== */
+int IrNodeNameToOpcode( const char* opcode_name ) {
+  size_t i;
+  for( i = 0 ; i < SPARROW_ARRAY_SIZE(OPCODE_NAME) ; ++i ) {
+    if(strcmp(opcode_name,OPCODE_NAME[i].name) ==0)
+      return OPCODE_NAME[i].op;
+  }
+  return -1;
+}
+
+struct IrNode* IrNodeNewRaw( struct IrGraph* graph , int opcode ,
+                                                     int effect ,
+                                                     int prop_effect ,
+                                                     int dead ) {
+  return new_node( graph , opcode , effect , prop_effect , dead , -1, -1, 0);
+}
+
+int IrNodeRawAddBound( struct IrGraph* graph , struct IrNode* node ,
+                                               struct IrNode* region ) {
+  if(!IrIsControl(region->op)) {
+    SPARROW_DBG(ERROR,"region %s is not control flow node!",IrGetName(region->op));
+    return -1;
+  }
+  if(IrIsControl(node->op)) {
+    SPARROW_DBG(ERROR,"node %s is a control flow node!",IrGetName(node->op));
+    return -1;
+  }
+  if(node->bounded_node) {
+    SPARROW_DBG(ERROR,"node %s has already been bounded to a node %s!",
+        IrGetName(node->op),
+        IrGetName(node->bounded_node->op));
+    return -1;
+  }
+  add_region(graph,region,node);
+  return 0;
+}
+
+int IrNodeRawAddInput( struct IrGraph* graph , struct IrNode* node ,
+                                               struct IrNode* another ) {
+  if(IrIsControl(node->op)) {
+    if(IrIsControl(another->op)) {
+      SPARROW_DBG(ERROR,"node %s is a control flow node, and tries to add as input "
+                        "to another control flow node %s!",
+                        IrGetName(another->op),IrGetName(node->op));
+      return -1;
+    }
+  } else {
+    if(IrIsControl(another->op)) {
+      SPARROW_DBG(ERROR,"tries to add node %s , which is a control flow node, "
+          "to a node %s which is an expression node!",
+          IrGetName(another->op),
+          IrGetName(node->op));
+      return -1;
+    }
+  }
+  {
+    struct IrUse* use = IrNodeFindInput(node,another);
+    if(use) {
+      SPARROW_DBG(ERROR,"node %s has already been added to node %s!",
+          IrGetName(another->op),
+          IrGetName(node->op));
+      return -1;
+    }
+    link_node(graph,node,another,input);
+  }
+  return 0;
+}
+
+int IrNodeRawAddOutput( struct IrGraph* graph , struct IrNode* node ,
+                                                struct IrNode* another ) {
+  if(IrIsControl(node->op)) {
+    if(!IrIsControl(another->op)) {
+      SPARROW_DBG(ERROR,"node %s is a control flow node, and tries to add an output "
+          "node %s which is *not* a control flow node!",
+          IrGetName(node->op),
+          IrGetName(another->op));
+      return -1;
+    }
+  } else {
+    if(IrIsControl(another->op)) {
+      SPARROW_DBG(ERROR,"node %s is not a control flow node, and tries to add an "
+          "output node %s which is a control flow node!",
+          IrGetName(node->op),
+          IrGetName(another->op));
+      return -1;
+    }
+  }
+
 }
 
 /* IrGraph ======================================== */

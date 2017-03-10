@@ -311,8 +311,24 @@ char* ReadFile( const char* filepath , size_t* length );
 struct ArenaAllocator;
 struct ArenaAllocator* ArenaAllocatorCreate( size_t initial_size , size_t maximum_size ) ;
 void* ArenaAllocatorAlloc( struct ArenaAllocator* aa , size_t size );
+void* ArenaAllocatorRealloc(struct ArenaAllocator* arena , void* old ,
+                                                           size_t old_size,
+                                                           size_t new_size );
 void ArenaAllocatorDestroy(struct ArenaAllocator* aa );
 
+/* Some string manipulation routine but allocate memory via a ArenaAllocator */
+const char* ArenaStrDupLen( struct ArenaAllocator* , const char* , size_t len );
+static SPARROW_INLINE
+const char* ArenaStrDup( struct ArenaAllocator* arena , const char* str ) {
+  return ArenaStrDupLen(arena,str,strlen(str));
+}
+const char* ArenaVPrintF(struct ArenaAllocator* , const char* , va_list );
+static SPARROW_INLINE
+const char* ArenaPrintF( struct ArenaAllocator* arena , const char* fmt , ... ) {
+  va_list vl;
+  va_start(vl,fmt);
+  return ArenaVPrintF(arena,fmt,vl);
+}
 
 /* Macro to help handling common dynamic array pattern in C.
  * The decalaration must be :

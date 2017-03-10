@@ -586,6 +586,21 @@ static SPARROW_INLINE uint32_t IrNodeProjectionGetIndex( const struct IrNode* no
   return *(uint32_t*)(IrNodeGetData(node));
 }
 
+/* IR Raw APIs ==================================================================
+ * The following API are used for building IR graph for testing purpose. It is
+ * used by text-ir-builder.
+ * For bc-ir-builder. They will use API aboves which comes with sanity check and
+ * other important features
+ */
+int IrNodeNameToOpcode( const char* opcode_name );
+struct IrNode* IrNodeNewRaw ( struct IrGraph* , int opcode ,
+                                                int effect ,
+                                                int prop_effect ,
+                                                int dead );
+int IrNodeRawAddBound( struct IrGraph* , struct IrNode* , struct IrNode* );
+int IrNodeRawAddInput( struct IrGraph* , struct IrNode* , struct IrNode* );
+int IrNodeRawAddOutput(struct IrGraph* , struct IrNode* , struct IrNode* );
+
 /* IR graph ================================================================
  * IR graph is really just a high level name of a bundle that has lots of
  * information stored inside of it. It is just a piece of central data

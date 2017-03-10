@@ -28,7 +28,7 @@ size_t StrBufVPrintF( struct StrBuf* sbuf , const char* fmt ,
     sbuf->buf = realloc(sbuf->buf,newsize);
     bufsz = newsize - sbuf->cap;
     ret = vsnprintf(sbuf->buf+sbuf->size,bufsz,fmt,vlbackup);
-    assert( (size_t)ret <= bufsz );
+    SPARROW_ASSERT( (size_t)ret <= bufsz );
     sbuf->size = oldsz + (size_t)(ret);
     sbuf->cap = newsize;
     return (size_t)(ret);
@@ -94,7 +94,7 @@ char* ReadFile( const char* fpath , size_t* size ) {
   fseek(f,0,SEEK_SET);
   ret = malloc(sz + 1);
   rd_sz = fread(ret,1,sz,f);
-  assert( rd_sz <= sz );
+  SPARROW_ASSERT( rd_sz <= sz );
   ret[rd_sz] = 0;
   if(size) *size = sz;
   fclose(f);
@@ -120,7 +120,7 @@ struct ArenaAllocator* ArenaAllocatorCreate( size_t initial_size ,
    * from underlying allocator ??? */
   struct aa_chunk* ck;
   struct ArenaAllocator* aa = malloc(sizeof(*aa));
-  assert(initial_size <= maximum_size);
+  SPARROW_ASSERT(initial_size <= maximum_size);
   ck = malloc(sizeof(*ck) + initial_size);
   ck->next = NULL;
   aa->cur_sz  = initial_size;
@@ -150,16 +150,27 @@ static void aa_grow( struct ArenaAllocator* aa , size_t guarantee ) {
 
 void* ArenaAllocatorAlloc( struct ArenaAllocator* aa , size_t sz ) {
   void* ret;
-  assert(sz <= aa->max_sz);
+  SPARROW_ASSERT(sz <= aa->max_sz);
   if(sz > aa->cur_sz) {
     aa_grow(aa,sz);
   }
   /* At least you have one guranteed size to allocate */
-  assert( sz <= aa->cur_sz );
+  SPARROW_ASSERT( sz <= aa->cur_sz );
   ret = aa->cur_ptr;
   aa->cur_ptr = (char*)(ret) + sz;
   aa->cur_sz -= sz;
   return ret;
+}
+
+void* ArenaAllocatorRealloc( struct ArenaAllocator* aa ,
+    void* buf , size_t old_size , size_t new_size ) {
+  if(new_size <= old_size) return buf;
+  else {
+    SPARROW_ASSERT(new_size > 0);
+    void* new_buf = ArenaAllocatorAlloc(aa,new_size);
+    if(buf &&(old_size>0)) memcpy(new_buf,buf,old_size);
+    return new_buf;
+  }
 }
 
 void ArenaAllocatorDestroy( struct ArenaAllocator* aa ) {
@@ -176,3 +187,32 @@ void ArenaAllocatorDestroy( struct ArenaAllocator* aa ) {
   aa->pool_sz =0;
   free(aa);
 }
+
+/* ===============================================
+ * Arena Allocator string helper routine
+ * =============================================*/
+const char* ArenaStrDupLen( struct ArenaAllocator* arena ,
+    const char* str , size_t len ) {
+  void* buffer = ArenaAllocatorAlloc(arena,len+1);
+  memcpy(buffer,str,len);
+  ((char*)(buffer))[len] = 0;
+  return buffer;
+}
+
+const char* ArenaVPrintF( struct ArenaAllocator* arena ,
+    const char* format , va_list vl ) {
+  va_list backup;
+  int ret;
+  char* buffer;
+  va_copy(backup,vl);
+  buffer = ArenaAllocatorAlloc( arena , 256 );
+  ret = vsnprintf(buffer,256,format,vl);
+  if(ret >= 256) {
+    int nret;
+    buffer = ArenaAllocatorAlloc( arena , ret + 1 );
+    nret = vsnprintf(buffer,ret + 1,format,vl);
+    SPARROW_ASSERT( nret == ret );
+  }
+  return buffer;
+}
+

@@ -31,7 +31,7 @@ int SparrowLoggerAssert( const char* file , int line , const char* expr ,
   (void)(!!(X) || SparrowLoggerAssert(__FILE__,__LINE__,#X,__VA__ARGS__))
 
 #define SPARROW_DBG(SEVERITY,FMT,...) \
-  SparrowLoggerWrite( SPARROW_LOGGER_SEVERITY_##SEVERITY,__FILE__,__LINE__,FMT,__VA_ARGS__)
+  SparrowLoggerWrite(SPARROW_LOGGER_SEVERITY_##SEVERITY,__FILE__,__LINE__,FMT,__VA_ARGS__)
 
 #else
 #define SPARROW_ASSERT(X) (void)(X)
