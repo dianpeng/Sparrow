@@ -24,7 +24,7 @@ struct IrGraph;
  * formats
  */
 
-int TextToIrGraph( const char* text , size_t length , struct IrGraph* output );
+int TextToIrGraph( const char* text , struct IrGraph* output );
 
 
 #endif /* TEXT_IR_BUILDER_H_ */

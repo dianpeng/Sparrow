@@ -141,6 +141,21 @@ static int ig_lexer_num ( struct ig_lexer* lexer ) {
   }
 }
 
+static void ig_lexer_skip_cmt( struct ig_lexer* lexer ) {
+  ++lexer->pos;
+  do {
+    int c = lexer->source[lexer->pos];
+    if(c == '\n') {
+      ++lexer->pos;
+      break;
+    } else if(c == 0) {
+      break;
+    } else {
+      ++lexer->pos;
+    }
+  } while(1);
+}
+
 static int ig_lexer_str( struct ig_lexer* lexer ) {
   int start = lexer->pos + 1;
   char* buf = ArenaAllocatorAlloc(lexer->graph->arena,32);
@@ -281,6 +296,7 @@ static int ig_lexer_next( struct ig_lexer* lexer ) {
       case ',': yield(IG_TOKEN_COMMA,1);
       case '[': yield(IG_TOKEN_LSQR,1);
       case ']': yield(IG_TOKEN_RSQR,1);
+      case '#': ig_lexer_skip_cmt(lexer); break;
       case '<': {
         int nc = lexer->source[lexer->pos+1];
         if(nc == '-') {
@@ -673,76 +689,65 @@ static int ig_parser_parse( struct ig_parser* p ) {
   return 0;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/* ====================================================
+ * Public Interface
+ * ==================================================*/
+int TextToIrGraph( const char* text , struct IrGraph* output ) {
+  ig_parser p;
+  ig_parser_init(&p,text,output);
+  return ig_parser_parse(&p);
+}
+
+/* ===================================================
+ * Self Testing
+ * =================================================*/
+#ifdef TEXT_IR_BUILDER_UNIT_TEST
+#include <assert.h>
+#define STRINGIFY(...) #__VA_ARGS__
+
+static void test_lexer() {
+  {
+    struct ig_lexer lexer;
+    const char* source = STRINGIFY(
+        { } node edge [ ] opcode effect prop_effect dead input_size
+        output_size input_max output_max bounded var var2 _var _
+        = , 123 "string" <- -> <>
+        );
+    int tokens[] = {
+      IG_TOKEN_LBRA,
+      IG_TOKEN_RBRA,
+      IG_TOKEN_NODE,
+      IG_TOKEN_EDGE,
+      IG_TOKEN_LSQR,
+      IG_TOKEN_RSQR,
+      IG_TOKEN_OPCODE,
+      IG_TOKEN_EFFECT,
+      IG_TOKEN_PROP_EFFECT,
+      IG_TOKEN_DEAD,
+      IG_TOKEN_INPUT_SIZE,
+      IG_TOKEN_OUTPUT_SIZE,
+      IG_TOKEN_INPUT_MAX,
+      IG_TOKEN_OUTPUT_MAX,
+      IG_TOKEN_BOUNDED,
+      IG_TOKEN_VARIABLE,
+      IG_TOKEN_VARIABLE,
+      IG_TOKEN_VARIABLE,
+      IG_TOKEN_VARIABLE,
+      IG_TOKEN_ASSIGN,
+      IG_TOKEN_COMMA,
+      IG_TOKEN_NUMBER,
+      IG_TOKEN_STRING,
+      IG_TOKEN_INPUT_ARROW,
+      IG_TOKEN_OUTPUT_ARROW,
+      IG_TOKEN_BIDIR_ARROW,
+      IG_TOKEN_EOF
+    };
+    int i;
+    lexer.next();
+    for( i = 0 ; i < SPARROW_ARRAY_SIZE(token) ; ++i ) {
+      assert(lexer.get_lexeme().token == token[i]);
+      if( token[i] != IG_TOKEN_EOF ) lexer.next();
+    }
+  }
+}
+#endif
