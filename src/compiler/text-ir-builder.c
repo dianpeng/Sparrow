@@ -1,5 +1,6 @@
 #include <compiler/text-ir-builder.h>
 #include <compiler/ir.h>
+#include <compiler/ir-helper.h>
 #include <shared/debug.h>
 
 #include <ctype.h>
@@ -29,8 +30,7 @@
  * edge-declaration-list := EMPTY | edge-decalaration*
  * edge-declaration := STRING arrow STRING
  * arrow := INPUT_ARROW | OUTPUT_ARROW
- * value := STRING | INTEGER
- */
+ * value := STRING | INTEGER */
 
 #define IG_TOKEN_LIST(__) \
   __(LBRA,"{" ) \
@@ -57,7 +57,7 @@
   __(OUTPUT_ARROW,"->") \
   __(BIDIR_ARROW,"<>") \
   __(ERROR,"<error>") \
-  __(END,"<end>")
+  __(EOF,"<eof>")
 
 enum ig_token {
 #define __(A,B) IG_TOKEN_##A,
@@ -121,10 +121,10 @@ static int ig_lexer_num ( struct ig_lexer* lexer ) {
   while(isdigit(lexer->source[start++]));
   errno = 0;
   num = strtol(lexer->source+lexer->pos,&endp,10);
-  if(endp == lexer->source + start && !errno) {
+  if(endp == lexer->source + (start-1) && !errno) {
     lexer->lexeme.int_value = num;
     lexer->lexeme.tk = IG_TOKEN_INTEGER;
-    lexer->lexeme.tk_len = start - lexer->pos;
+    lexer->lexeme.tk_len = (start - lexer->pos - 1);
     return IG_TOKEN_INTEGER;
   } else {
     lexer->lexeme.tk_len = 0;
@@ -184,6 +184,7 @@ static int ig_lexer_str( struct ig_lexer* lexer ) {
       cap *= 2;
     }
     buf[sz++] = c;
+    ++start;
   } while(1);
 
   if(sz == cap) {
@@ -286,7 +287,7 @@ static int ig_lexer_var_or_keyword( struct ig_lexer* lexer ) {
 
 static int ig_lexer_next( struct ig_lexer* lexer ) {
   lexer->pos += lexer->lexeme.tk_len;
-  lexer->ccount += lexer->pos;
+  lexer->ccount += lexer->lexeme.tk_len;
   do {
     int c = lexer->source[lexer->pos];
     switch(c) {
@@ -331,7 +332,7 @@ static int ig_lexer_next( struct ig_lexer* lexer ) {
         lexer->ccount = 1;
         break;
       case 0:
-        yield(IG_TOKEN_END,0);
+        yield(IG_TOKEN_EOF,0);
       default:
         return ig_lexer_var_or_keyword(lexer);
     }
@@ -339,6 +340,8 @@ static int ig_lexer_next( struct ig_lexer* lexer ) {
   SPARROW_UNREACHABLE();
   return IG_TOKEN_ERROR;
 }
+
+#undef yield /* yield */
 
 /* =================================================
  * ig_parser for the irgraph textual representation
@@ -374,6 +377,31 @@ static SPARROW_INLINE void ig_parser_init( struct ig_parser* p ,
   p->nr_arr = NULL;
   p->nr_cap = 0;
   p->nr_size= 0;
+
+  /* try to push the start and end node as defualt into the nr_arr */
+  {
+    struct node_record nr;
+    nr.node = graph->start;
+    nr.name = "start";
+    nr.input_size = 0;
+    nr.input_max  = 0;
+    nr.output_size= 1;
+    nr.output_max = 1;
+    nr.bounded = 0;
+    DynArrPush(p,nr,nr);
+  }
+
+  {
+    struct node_record nr;
+    nr.node = graph->end;
+    nr.name = "end";
+    nr.input_size = -1;
+    nr.input_max  = -1;
+    nr.output_size= 0;
+    nr.output_max = 0;
+    nr.bounded = 0;
+    DynArrPush(p,nr,nr);
+  }
 }
 
 #define ig_parser_expect(PARSER,TK) \
@@ -441,6 +469,7 @@ int ig_parser_parse_attr( struct ig_parser* p , int* key , int* value ) {
 
 #define DO(TK,TYPE,CONVERTER,CHECKER) \
     case (TK): do { \
+      ig_lexer_next(LEXER(p)); \
       ig_parser_expect(p,IG_TOKEN_ASSIGN); \
       ig_parser_try(p,TYPE); \
       (*value) = CONVERTER(LEXEME(p)); \
@@ -469,48 +498,49 @@ int ig_parser_parse_attr( struct ig_parser* p , int* key , int* value ) {
        OPCODE_CHECKER);
     /* effect */
     DO(IG_TOKEN_EFFECT,
-       IG_TOKEN_NUMBER,
+       IG_TOKEN_INTEGER,
        BOOLEAN_CONVERTER,
        NULL_CHECKER);
     /* prop_effect */
     DO(IG_TOKEN_PROP_EFFECT,
-       IG_TOKEN_NUMBER,
+       IG_TOKEN_INTEGER,
        BOOLEAN_CONVERTER,
        NULL_CHECKER);
     /* dead */
     DO(IG_TOKEN_DEAD,
-       IG_TOKEN_NUMBER,
+       IG_TOKEN_INTEGER,
        BOOLEAN_CONVERTER,
        NULL_CHECKER);
     /* input_size */
     DO(IG_TOKEN_INPUT_SIZE,
-       IG_TOKEN_NUMBER,
+       IG_TOKEN_INTEGER,
        INTEGER_CONVERTER,
        NULL_CHECKER);
     /* input_max */
     DO(IG_TOKEN_INPUT_MAX,
-       IG_TOKEN_NUMBER,
+       IG_TOKEN_INTEGER,
        INTEGER_CONVERTER,
        NULL_CHECKER);
     /* output_size */
     DO(IG_TOKEN_OUTPUT_SIZE,
-       IG_TOKEN_NUMBER,
+       IG_TOKEN_INTEGER,
        INTEGER_CONVERTER,
        NULL_CHECKER);
     /* output_max */
     DO(IG_TOKEN_OUTPUT_MAX,
-       IG_TOKEN_NUMBER,
+       IG_TOKEN_INTEGER,
        INTEGER_CONVERTER,
        NULL_CHECKER);
     /* bounded */
     DO(IG_TOKEN_BOUNDED,
-       IG_TOKEN_NUMBER,
+       IG_TOKEN_INTEGER,
        BOOLEAN_CONVERTER,
        NULL_CHECKER);
     default:
       SPARROW_DBG(ERROR,"IrGraph parser: unknown token %s!",ig_token_name(TOKEN(p)));
       return -1;
   }
+#undef DO
 #undef OPCODE_CONVERTER
 #undef OPCODE_CHECKER
 #undef INTEGER_CONVERTER
@@ -520,12 +550,12 @@ int ig_parser_parse_attr( struct ig_parser* p , int* key , int* value ) {
   return 0;
 }
 
-static void
+static
 int ig_parser_parse_attr_list( struct ig_parser* p , const char* name ,
                                                      struct node_record** node ) {
-  int input_max = 0;
+  int input_max = -1;
   int input_size= 0;
-  int output_max= 0;
+  int output_max= -1;
   int output_size=0;
   int bounded = 0;
   int opcode = -1;
@@ -592,7 +622,7 @@ static SPARROW_INLINE
 int ig_parser_parse_node_list( struct ig_parser* p ) {
   int node_count = 0;
   while( TOKEN(p) != IG_TOKEN_RBRA &&
-         TOKEN(p) != IG_TOKEN_END ) {
+         TOKEN(p) != IG_TOKEN_EOF ) {
     if(ig_parser_parse_node(p)) return -1;
     ++node_count;
   }
@@ -605,9 +635,9 @@ static SPARROW_INLINE
 int ig_parser_parse_node_section( struct ig_parser* p ) {
   SPARROW_ASSERT( TOKEN(p) == IG_TOKEN_NODE );
   ig_lexer_next(LEXER(p));
-  ig_parser_exepct(p,IG_TOKEN_LBRA);
+  ig_parser_expect(p,IG_TOKEN_LBRA);
   if(ig_parser_parse_node_list(p)) return -1;
-  ig_parser_expect(p,IG_TOKEN_RPAR);
+  ig_parser_expect(p,IG_TOKEN_RBRA);
   return 0;
 }
 
@@ -645,20 +675,21 @@ int ig_parser_parse_edge ( struct ig_parser* p ) {
   ig_lexer_next(LEXER(p));
 
   if(op == IG_TOKEN_INPUT_ARROW) {
-    IrNodeRawAddInput(G(p),start,end);
+    IrNodeRawAddInput(G(p),start->node,end->node);
   } else if(op == IG_TOKEN_OUTPUT_ARROW) {
-    IrNodeRawAddOutput(G(p),start,end);
+    IrNodeRawAddOutput(G(p),start->node,end->node);
   } else {
-    IrNodeRawAddInput(G(p),start,end);
-    IrNodeRawAddOutput(G(p),start,end);
+    IrNodeRawAddInput(G(p),start->node,end->node);
+    IrNodeRawAddOutput(G(p),start->node,end->node);
   }
+  return 0;
 }
 
 static int ig_parser_parse_edge_list( struct ig_parser* p ) {
   int count = 0;
   while(TOKEN(p) != IG_TOKEN_RBRA &&
-        TOKEN(p) != IG_TOKEN_END ) {
-    if(ig_parser_edge_list(p)) return -1;
+        TOKEN(p) != IG_TOKEN_EOF) {
+    if(ig_parser_parse_edge(p)) return -1;
     ++count;
   }
   if(count ==0) SPARROW_DBG(WARNING,"IrGraph parser: empty edge section?");
@@ -668,9 +699,50 @@ static int ig_parser_parse_edge_list( struct ig_parser* p ) {
 static int ig_parser_parse_edge_section( struct ig_parser* p ) {
   SPARROW_ASSERT( TOKEN(p) == IG_TOKEN_EDGE );
   ig_lexer_next(LEXER(p));
-  ig_parser_exepct(p,IG_TOKEN_LBRA);
+  ig_parser_expect(p,IG_TOKEN_LBRA);
   if(ig_parser_parse_edge_list(p)) return -1;
-  ig_parser_exepct(p,IG_TOKEN_RBRA);
+  ig_parser_expect(p,IG_TOKEN_RBRA);
+  return 0;
+}
+
+static int ig_parser_verify( struct ig_parser* p ) {
+  size_t i;
+  for( i = 0 ; i < p->nr_size ; ++i ) {
+    struct node_record* nr = p->nr_arr + i;
+    struct IrNode* node = nr->node;
+
+#define CHECK(field) \
+    do { \
+      if(nr->field != -1 && node->field != nr->field) { \
+        SPARROW_DBG(ERROR,"IrNode: name(%s)'s field (%s) doesn't match!" \
+                          "expect (%d) , but got (%d)!", \
+                          nr->name, \
+                          #field, \
+                          nr->field, \
+                          node->field); \
+        return -1; \
+      } \
+    } while(0)
+
+    CHECK(input_max);
+    CHECK(input_size);
+    CHECK(output_max);
+    CHECK(output_size);
+
+#undef CHECK /* CHECK */
+
+    {
+      int b = node->bounded_node ? 1 : 0;
+      if(b != nr->bounded) {
+        SPARROW_DBG(ERROR,"IrNode: name(%s)'s field (%s) doesn't match!"
+                          "expect (%d) , but got (%d)!",
+                          nr->name,
+                          "bounded",
+                          nr->bounded,
+                          b);
+      }
+    }
+  }
   return 0;
 }
 
@@ -686,6 +758,7 @@ static int ig_parser_parse( struct ig_parser* p ) {
     return -1;
   }
   if(ig_parser_parse_edge_section(p)) return -1;
+  if(ig_parser_verify(p)) return -1;
   return 0;
 }
 
@@ -693,8 +766,8 @@ static int ig_parser_parse( struct ig_parser* p ) {
  * Public Interface
  * ==================================================*/
 int TextToIrGraph( const char* text , struct IrGraph* output ) {
-  ig_parser p;
-  ig_parser_init(&p,text,output);
+  struct ig_parser p;
+  ig_parser_init(&p,output,text);
   return ig_parser_parse(&p);
 }
 
@@ -705,9 +778,11 @@ int TextToIrGraph( const char* text , struct IrGraph* output ) {
 #include <assert.h>
 #define STRINGIFY(...) #__VA_ARGS__
 
+#if 0
 static void test_lexer() {
   {
     struct ig_lexer lexer;
+    struct IrGraph graph;
     const char* source = STRINGIFY(
         { } node edge [ ] opcode effect prop_effect dead input_size
         output_size input_max output_max bounded var var2 _var _
@@ -735,7 +810,7 @@ static void test_lexer() {
       IG_TOKEN_VARIABLE,
       IG_TOKEN_ASSIGN,
       IG_TOKEN_COMMA,
-      IG_TOKEN_NUMBER,
+      IG_TOKEN_INTEGER,
       IG_TOKEN_STRING,
       IG_TOKEN_INPUT_ARROW,
       IG_TOKEN_OUTPUT_ARROW,
@@ -743,11 +818,103 @@ static void test_lexer() {
       IG_TOKEN_EOF
     };
     int i;
-    lexer.next();
-    for( i = 0 ; i < SPARROW_ARRAY_SIZE(token) ; ++i ) {
-      assert(lexer.get_lexeme().token == token[i]);
-      if( token[i] != IG_TOKEN_EOF ) lexer.next();
+    IrGraphInit(&graph,NULL,NULL,NULL);
+    ig_lexer_init(&lexer,&graph,source);
+    ig_lexer_next(&lexer);
+    for( i = 0 ; i < SPARROW_ARRAY_SIZE(tokens) ; ++i ) {
+      assert(lexer.lexeme.tk == tokens[i]);
+      if( tokens[i] != IG_TOKEN_EOF ) ig_lexer_next(&lexer);
     }
+    IrGraphDestroy(&graph);
   }
+  {
+    struct ig_lexer lexer;
+    struct IrGraph graph;
+    const char* source = STRINGIFY( 123 41231 23 -3 -4 -11 -0 0);
+    IrGraphInit(&graph,NULL,NULL,NULL);
+    ig_lexer_init(&lexer,&graph,source);
+    ig_lexer_next(&lexer);
+
+#define DO(NUM) \
+    do { \
+      assert(lexer.lexeme.tk == IG_TOKEN_INTEGER); \
+      assert(lexer.lexeme.int_value == (NUM)); \
+      ig_lexer_next(&lexer); \
+    } while(0)
+
+    DO(123);
+    DO(41231);
+    DO(23);
+    DO(-3);
+    DO(-4);
+    DO(-11);
+    DO(0);
+    DO(0);
+
+    assert( lexer.lexeme.tk == IG_TOKEN_EOF );
+
+#undef DO /* DO */
+    IrGraphDestroy(&graph);
+  }
+  {
+    struct ig_lexer lexer;
+    struct IrGraph graph;
+    const char* source = STRINGIFY( "name" "you" "hello" "a\t\n" );
+    IrGraphInit(&graph,NULL,NULL,NULL);
+    ig_lexer_init(&lexer,&graph,source);
+    ig_lexer_next(&lexer);
+
+#define DO(STR) \
+    do { \
+      assert(lexer.lexeme.tk == IG_TOKEN_STRING); \
+      assert(strcmp(lexer.lexeme.str_value,(STR))==0); \
+      ig_lexer_next(&lexer); \
+    } while(0)
+
+    DO("name");
+    DO("you");
+    DO("hello");
+    DO("a\t\n");
+
+    assert( lexer.lexeme.tk == IG_TOKEN_EOF );
+
+#undef DO /* DO */
+    IrGraphDestroy(&graph);
+  }
+}
+#endif
+
+static void test_parser() {
+  {
+    struct IrGraph graph;
+    const char* source = STRINGIFY(
+        node {
+          "a"[opcode="ctl_region",output_size=1]
+        }
+        edge {
+          "start" -> "a"
+          "a" -> "end"
+          "start" -> "end"
+        }
+    );
+    IrGraphInit(&graph,NULL,NULL,NULL);
+    TextToIrGraph(source,&graph);
+    {
+      struct StrBuf output;
+      struct IrGraphDisplayOption option;
+      option.show_extra_info = 1;
+      option.only_control_flow = 0;
+      StrBufInit(&output,1024);
+      IrGraphToDotFormat( &output , &graph , &option);
+      fwrite(output.buf,1,output.size,stdout);
+      StrBufDestroy(&output);
+    }
+    IrGraphDestroy(&graph);
+  }
+}
+
+int main() {
+  test_parser();
+  return 0;
 }
 #endif

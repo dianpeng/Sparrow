@@ -683,7 +683,7 @@ struct IrNode* IrNodeNewProjection( struct IrGraph* graph , struct IrNode* targe
 /* IrNode RAW ========================================================== */
 int IrNodeNameToOpcode( const char* opcode_name ) {
   size_t i;
-  for( i = 0 ; i < SPARROW_ARRAY_SIZE(OPCODE_NAME) ; ++i ) {
+  for( i = 0 ; i < SPARROW_ARRAY_SIZE(OPCODE_NAME) - 1 ; ++i ) {
     if(strcmp(opcode_name,OPCODE_NAME[i].name) ==0)
       return OPCODE_NAME[i].op;
   }
@@ -738,7 +738,7 @@ int IrNodeRawAddInput( struct IrGraph* graph , struct IrNode* node ,
   {
     struct IrUse* use = IrNodeFindInput(node,another);
     if(use) {
-      SPARROW_DBG(ERROR,"node %s has already been added to node %s!",
+      SPARROW_DBG(ERROR,"node %s has already been added to node %s as input!",
           IrGetName(another->op),
           IrGetName(node->op));
       return -1;
@@ -767,7 +767,17 @@ int IrNodeRawAddOutput( struct IrGraph* graph , struct IrNode* node ,
       return -1;
     }
   }
-
+  {
+    struct IrUse* use = IrNodeFindOutput(node,another);
+    if(use) {
+      SPARROW_DBG(ERROR,"node %s has already been added to node %s as output!",
+          IrGetName(another->op),
+          IrGetName(node->op));
+      return -1;
+    }
+    link_node(graph,node,another,output);
+  }
+  return 0;
 }
 
 /* IrGraph ======================================== */

@@ -12,7 +12,7 @@ static struct logger_context LOGGER_CTX = {
 };
 
 static const char* SEVERIFY[] = {
-  "INFO","WARN","ERROR","FATAL","ASSERT"
+  "INFO","WARNING","ERROR","FATAL","ASSERT"
 };
 
 void SparrowSetLoggerOutputFile( FILE* output ) {

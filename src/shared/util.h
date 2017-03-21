@@ -330,6 +330,8 @@ const char* ArenaPrintF( struct ArenaAllocator* arena , const char* fmt , ... ) 
   return ArenaVPrintF(arena,fmt,vl);
 }
 
+#define SparrowAlign(SIZE,ALIGN) (((SIZE) + (ALIGN)-1) & ~((ALIGN)-1))
+
 /* Macro to help handling common dynamic array pattern in C.
  * The decalaration must be :
  * NAME_arr;

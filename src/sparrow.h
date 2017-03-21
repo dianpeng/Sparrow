@@ -56,6 +56,8 @@
 #define SPARROW_INT_MIN INT_MIN
 #endif /* SPARROW_INT_MIN */
 
+#define SPARROW_HASH_MAX_SIZE (1<<29)
+
 /* Static assertion directives */
 #define SPARROW_STATIC_ASSERT(COND,MSG) \
   typedef char static_assert_##MSG[(COND)?1:-1]

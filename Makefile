@@ -46,6 +46,9 @@ show_bc:
 ir:
 	$(CC) -Wall -Werror -g3 $(DEPENDEND) test/compiler/ir-test.c -lm -o ir-test
 
+text-ir:
+	$(CC) -Wall -Werror -g3 -DTEXT_IR_BUILDER_UNIT_TEST $(DEPENDEND) src/compiler/text-ir-builder.c -lm -o text-ir-builder
+
 .PHONY:clean_coverage
 
 clean_coverage:
